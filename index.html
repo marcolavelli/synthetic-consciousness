@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stato Emotivo IA - Ruota di Plutchik</title>
+  <meta name="description" content="Visualizzazione dello stato emotivo sintetico di un'intelligenza artificiale tramite una massa organica reattiva basata sul diagramma delle emozioni di Robert Plutchik.">
+  
+  <!-- Favicon & Mobile Theming -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23080812' stroke='%238b5cf6' stroke-width='8'/><circle cx='50' cy='50' r='20' fill='%238b5cf6'/></svg>">
+  <meta name="theme-color" content="#030306">
+  
+  <!-- OpenGraph / Social Metadata -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Stato Emotivo IA - Ruota di Plutchik">
+  <meta property="og:description" content="Visualizzazione dello stato emotivo sintetico di un'intelligenza artificiale tramite una massa organica reattiva basata sul diagramma delle emozioni di Robert Plutchik.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Stato Emotivo IA - Ruota di Plutchik">
+  <meta name="twitter:description" content="Visualizzazione dello stato emotivo sintetico di un'intelligenza artificiale tramite una massa organica reattiva basata sul diagramma delle emozioni di Robert Plutchik.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- WebGL 3D Canvas for Shader Entity -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- Cinematic Vignette & Color Wash Overlay -->
+  <div class="vignette-overlay"></div>
+
+  <!-- Main UI Layer -->
+  <div class="ui-container">
+    
+    <!-- Top Header Navigation -->
+    <header class="header-bar interactive">
+      <div class="brand-section">
+        <div class="status-dot" id="status-indicator"></div>
+        <div class="title-group">
+          <h1><span class="status-title">Stato Emotivo</span> <span class="badge" id="dataset-count">Caricamento...</span></h1>
+          <p>Coscienza Sintetica • Diagramma di Plutchik</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button id="btn-sound-toggle" class="btn-header" title="Attiva/Disattiva sintesi sonora">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+          Audio: MUTO
+        </button>
+
+        <button id="btn-plutchik-toggle" class="btn-header" title="Apri il diagramma della ruota di Plutchik">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+          </svg>
+          Ruota di Plutchik
+        </button>
+
+        <button id="btn-catalog-toggle" class="btn-header" title="Sfoglia tutte le 90 emozioni del dataset">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          Catalogo Dataset
+        </button>
+      </div>
+    </header>
+
+    <!-- Center Content: Floating Emotion Card -->
+    <main class="center-content">
+      <section class="emotion-card" id="emotion-card">
+        <div class="emotion-card-header">
+          <h2 class="emotion-card-title" id="card-title">Vuoto Primordiale</h2>
+          <div class="emotion-culture" id="card-culture">Origine Sintetica • Stato Basale</div>
+        </div>
+
+        <div class="emotion-tags">
+          <span class="tag tag-valenza-neutra" id="tag-valenza">Valenza: neutra</span>
+          <span class="tag tag-arousal" id="tag-arousal">Arousal: basso</span>
+          <span class="tag" id="tag-family">Famiglia: Equilibrio</span>
+        </div>
+
+        <p class="emotion-meaning" id="card-meaning">
+          « L'entità sintetica si trova in una quiete primordiale. In attesa di uno stimolo emotivo umano per polarizzarsi e assumere forma. »
+        </p>
+
+        <!-- Dynamic Plutchik Breakdown -->
+        <div class="plutchik-breakdown">
+          <div class="plutchik-label">
+            <span>Composizione Ruota di Plutchik</span>
+            <span style="color: var(--emotion-color)">Vettore Attivo</span>
+          </div>
+          <div class="vector-bars" id="vector-bars">
+            <!-- Injected dynamically -->
+          </div>
+        </div>
+
+        <!-- Mini Radar Compass & Opposite Emotion -->
+        <div class="radar-wrapper">
+          <canvas id="radar-canvas" class="radar-canvas" width="44" height="44"></canvas>
+          <div class="radar-info">
+            <div class="radar-info-title">Polarità Diametrale</div>
+            <div class="radar-info-desc" id="radar-opposite-text">Opposto: In attesa</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Controls & Emotion Input -->
+    <footer class="bottom-section">
+      <div class="search-container">
+        
+        <!-- Autocomplete Dropdown List -->
+        <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+
+        <!-- Main Input Field -->
+        <div class="input-box-wrapper">
+          <div class="input-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <input 
+            type="text" 
+            id="emotion-input" 
+            class="emotion-input" 
+            placeholder="Sussurra un'emozione all'IA... (es. Gioia, Saudade, Rabbia, Ikigai, Weltschmerz)" 
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="input-actions">
+            <button id="btn-clear" class="btn-icon" title="Cancella testo">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <button id="btn-send" class="btn-send" title="Evoca emozione">
+              <span>Evoca</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Exploration Chips -->
+      <div class="quick-chips-wrapper">
+        <button id="btn-random" class="btn-random" title="Seleziona un'emozione a caso dal dataset">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="5"></rect>
+            <circle cx="8" cy="8" r="1.5"></circle>
+            <circle cx="16" cy="16" r="1.5"></circle>
+            <circle cx="12" cy="12" r="1.5"></circle>
+          </svg>
+          Casuale
+        </button>
+
+        <button class="quick-chip" data-emotion="Joy">Gioia</button>
+        <button class="quick-chip" data-emotion="Sadness">Tristezza</button>
+        <button class="quick-chip" data-emotion="Anger">Rabbia</button>
+        <button class="quick-chip" data-emotion="Fear">Paura</button>
+        <button class="quick-chip" data-emotion="Surprise">Sorpresa</button>
+        <button class="quick-chip" data-emotion="Saudade">Saudade</button>
+        <button class="quick-chip" data-emotion="Ikigai">Ikigai</button>
+        <button class="quick-chip" data-emotion="Weltschmerz">Weltschmerz</button>
+        <button class="quick-chip" data-emotion="Duende">Duende</button>
+        <button class="quick-chip" data-emotion="Sisu">Sisu</button>
+        <button class="quick-chip" data-emotion="Tarab">Tarab</button>
+        <button class="quick-chip" data-emotion="Mono no aware">Mono no aware</button>
+        <button class="quick-chip" data-emotion="Meraki">Meraki</button>
+        <button class="quick-chip" data-emotion="Kummerspeck">Kummerspeck</button>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- MODAL: RUOTA DELLE EMOZIONI DI ROBERT PLUTCHIK -->
+  <div class="modal-overlay" id="modal-plutchik">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Ruota delle Emozioni di Robert Plutchik</h2>
+          <p>8 emozioni primarie, polarità opposte e diadi emozionali. Fai clic su un petalo per plasmare la massa emotiva.</p>
+        </div>
+        <button class="btn-icon" id="btn-close-plutchik">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="plutchik-svg-container" id="plutchik-svg-box">
+          <!-- Dynamic SVG Generated by app.js -->
+        </div>
+        <div class="plutchik-legend" id="plutchik-legend">
+          <!-- Injected dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CATALOGO COMPLETO DELLE 90 EMOZIONI -->
+  <div class="modal-overlay" id="modal-catalog">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Archivio Emotivo Universale (90 Emozioni)</h2>
+          <p>Dataset estratto da emotions.jsonl: tradizioni interculturali, Ekman, Plutchik e Cowen &amp; Keltner.</p>
+        </div>
+        <button class="btn-icon" id="btn-close-catalog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input 
+          type="text" 
+          id="catalog-search" 
+          class="catalog-search-input" 
+          placeholder="Cerca per nome, cultura o significato (es. malinconia, giapponese, amore)..."
+        >
+        <div class="catalog-filters">
+          <button class="filter-btn active" data-filter="all">Tutte (90)</button>
+          <button class="filter-btn" data-filter="plutchik">Plutchik &amp; Diadi</button>
+          <button class="filter-btn" data-filter="ekman">Ekman Primarie</button>
+          <button class="filter-btn" data-filter="cowen">Cowen &amp; Keltner (27)</button>
+          <button class="filter-btn" data-filter="cultura">Culture dal Mondo</button>
+          <button class="filter-btn" data-filter="positiva">Valenza Positiva</button>
+          <button class="filter-btn" data-filter="negativa">Valenza Negativa</button>
+        </div>
+        <div class="catalog-grid" id="catalog-grid">
+          <!-- Cards injected dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (Local offline copy with fallback to CDN) -->
+  <script src="libs/three.min.js"></script>
+  <script>
+    if (typeof THREE === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+    }
+  </script>
+
+  <!-- Enriched Dataset Fallback for offline file:/// protocol -->
+  <script src="emotions-data.js"></script>
+
+  <!-- Main Application Script -->
+  <script src="app.js"></script>
+</body>
+</html>
