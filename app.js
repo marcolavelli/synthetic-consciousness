@@ -448,17 +448,15 @@ function initThree() {
   scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x030306, 0.09);
 
-  // Positioned camera with perfect framing for compact entity
+  // Positioned camera with responsive framing for mobile and desktop
   camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-  camera.position.z = 6.4;
-
   renderer = new THREE.WebGLRenderer({
     canvas: canvas,
     antialias: true,
     alpha: true,
     powerPreference: "high-performance"
   });
-  renderer.setSize(width, height);
+  updateCameraFraming();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   // 1. Central Compact Entity (Radius 1.45 instead of 2.1)
@@ -494,6 +492,7 @@ function initThree() {
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('touchmove', onTouchMove, { passive: true });
+  canvas.addEventListener('touchstart', onTouchStart, { passive: true });
   canvas.addEventListener('click', triggerShockwave);
 
   animate();
@@ -583,17 +582,40 @@ function initCosmicDust() {
   scene.add(dust);
 }
 
-function onWindowResize() {
+function updateCameraFraming() {
   const width = window.innerWidth;
   const height = window.innerHeight;
-  camera.aspect = width / height;
+  const isMobile = width <= 768;
+  const aspect = width / height;
+  camera.aspect = aspect;
+
+  if (isMobile) {
+    camera.fov = aspect < 0.6 ? 50 : 45;
+    camera.position.z = aspect < 0.6 ? 6.8 : 6.4;
+    camera.position.y = 0.25;
+  } else {
+    camera.fov = 42;
+    camera.position.z = 6.4;
+    camera.position.y = 0.0;
+  }
   camera.updateProjectionMatrix();
-  renderer.setSize(width, height);
+  if (renderer) renderer.setSize(width, height);
+}
+
+function onWindowResize() {
+  updateCameraFraming();
 }
 
 function onMouseMove(e) {
   mouse.targetX = (e.clientX / window.innerWidth - 0.5) * 2;
   mouse.targetY = -(e.clientY / window.innerHeight - 0.5) * 2;
+}
+
+function onTouchStart(e) {
+  if (e.touches.length > 0) {
+    mouse.targetX = (e.touches[0].clientX / window.innerWidth - 0.5) * 2;
+    mouse.targetY = -(e.touches[0].clientY / window.innerHeight - 0.5) * 2;
+  }
 }
 
 function onTouchMove(e) {
@@ -747,11 +769,11 @@ function toggleAudio() {
   if (isAudioEnabled) {
     masterGain.gain.setTargetAtTime(0.12, audioCtx.currentTime, 0.4);
     btn.classList.add('active');
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> Audio: ATTIVO`;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> <span class="btn-text" id="sound-btn-text">Audio: ATTIVO</span>`;
   } else {
     masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);
     btn.classList.remove('active');
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg> Audio: MUTO`;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg> <span class="btn-text" id="sound-btn-text">Audio: MUTO</span>`;
   }
 }
 
@@ -1136,6 +1158,52 @@ function initSearchUI() {
 
   const soundBtn = document.getElementById('btn-sound-toggle');
   soundBtn.addEventListener('click', toggleAudio);
+
+  // Card Collapse / Expand Toggle & Mobile Backdrop
+  const card = document.getElementById('emotion-card');
+  const btnToggleCard = document.getElementById('btn-toggle-card');
+  const cardBackdrop = document.getElementById('card-backdrop');
+
+  const setCardCollapsed = (collapsed) => {
+    if (!card) return;
+    if (collapsed) {
+      card.classList.add('collapsed');
+      if (cardBackdrop) cardBackdrop.classList.remove('active');
+    } else {
+      card.classList.remove('collapsed');
+      if (cardBackdrop && window.innerWidth <= 768) {
+        cardBackdrop.classList.add('active');
+      }
+    }
+  };
+
+  if (btnToggleCard && card) {
+    btnToggleCard.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCurrentlyCollapsed = card.classList.contains('collapsed');
+      setCardCollapsed(!isCurrentlyCollapsed);
+    });
+
+    const topBar = card.querySelector('.emotion-card-topbar');
+    if (topBar) {
+      topBar.addEventListener('click', () => {
+        if (card.classList.contains('collapsed')) {
+          setCardCollapsed(false);
+        }
+      });
+    }
+
+    if (cardBackdrop) {
+      cardBackdrop.addEventListener('click', () => {
+        setCardCollapsed(true);
+      });
+    }
+  }
+
+  // On mobile (<= 768px), start with card collapsed for optimal view of 3D entity
+  if (window.innerWidth <= 768 && card) {
+    setCardCollapsed(true);
+  }
 }
 
 // ============================================================================
@@ -1398,5 +1466,1011 @@ window.addEventListener('DOMContentLoaded', () => {
   initSearchUI();
   initPlutchikWheelModal();
   initCatalogModal();
+  initAnalyzeModal();
+  initImageAnalyzeModal();
   loadDataset();
 });
+
+// ============================================================================
+// 10. TEXT EMOTION RECOGNITION ENGINE (NLP LOCALE - NESSUNA API ESTERNA)
+// ============================================================================
+
+/**
+ * Dizionario lessicale emozionale italiano / inglese.
+ * Ogni parola chiave mappa a un oggetto con pesi sulle 8 emozioni primarie di Plutchik.
+ * I pesi sono normalizzati nell'intervallo [0, 1].
+ */
+const EMOTION_LEXICON = {
+  // ── GIOIA ──────────────────────────────────────────────────────────────────
+  "felice": { gioia: 0.95 },
+  "felicità": { gioia: 0.95 },
+  "contento": { gioia: 0.85 },
+  "gioioso": { gioia: 0.95 },
+  "gioia": { gioia: 1.0 },
+  "allegro": { gioia: 0.80 },
+  "allegria": { gioia: 0.80 },
+  "entusiasmo": { gioia: 0.75, anticipazione: 0.35 },
+  "entusiasta": { gioia: 0.75, anticipazione: 0.35 },
+  "euforico": { gioia: 0.90 },
+  "euforia": { gioia: 0.90 },
+  "esultante": { gioia: 0.85 },
+  "estasiato": { gioia: 0.85 },
+  "estasi": { gioia: 0.85 },
+  "giubilo": { gioia: 0.90 },
+  "giubilante": { gioia: 0.90 },
+  "lieto": { gioia: 0.70 },
+  "beato": { gioia: 0.80 },
+  "beatitudine": { gioia: 0.80 },
+  "felicissimo": { gioia: 1.0 },
+  "esaltato": { gioia: 0.75 },
+  "ottimo": { gioia: 0.55 },
+  "meraviglioso": { gioia: 0.80, sorpresa: 0.20 },
+  "magnifico": { gioia: 0.75 },
+  "splendido": { gioia: 0.70 },
+  "fantastico": { gioia: 0.80 },
+  "perfetto": { gioia: 0.65 },
+  "bellissimo": { gioia: 0.65 },
+  "bello": { gioia: 0.50 },
+  "rido": { gioia: 0.80 },
+  "ridere": { gioia: 0.80 },
+  "riso": { gioia: 0.75 },
+  "sorriso": { gioia: 0.70 },
+  "sorrido": { gioia: 0.70 },
+  "divertente": { gioia: 0.60 },
+  "divertimento": { gioia: 0.70 },
+  "piacere": { gioia: 0.65, fiducia: 0.20 },
+  "piacevole": { gioia: 0.60 },
+  "soddisfatto": { gioia: 0.65, fiducia: 0.25 },
+  "soddisfazione": { gioia: 0.65, fiducia: 0.25 },
+  "successo": { gioia: 0.70, fiducia: 0.30 },
+  "vittoria": { gioia: 0.80 },
+  "vincere": { gioia: 0.75 },
+  "amore": { gioia: 0.80, fiducia: 0.60 },
+  "amico": { gioia: 0.50, fiducia: 0.50 },
+  "amicizia": { gioia: 0.55, fiducia: 0.55 },
+  "pace": { gioia: 0.55, fiducia: 0.45 },
+  "joy": { gioia: 1.0 },
+  "happy": { gioia: 0.90 },
+  "happiness": { gioia: 0.90 },
+
+  // ── TRISTEZZA ───────────────────────────────────────────────────────────────
+  "triste": { tristezza: 0.90 },
+  "tristezza": { tristezza: 0.95 },
+  "malinconico": { tristezza: 0.80 },
+  "malinconia": { tristezza: 0.80 },
+  "dolore": { tristezza: 0.75 },
+  "dolente": { tristezza: 0.70 },
+  "sofferenza": { tristezza: 0.80 },
+  "soffro": { tristezza: 0.80 },
+  "soffrire": { tristezza: 0.80 },
+  "piango": { tristezza: 0.85 },
+  "piangere": { tristezza: 0.85 },
+  "lacrime": { tristezza: 0.80 },
+  "lacrima": { tristezza: 0.80 },
+  "pianto": { tristezza: 0.85 },
+  "lutto": { tristezza: 0.90 },
+  "perdita": { tristezza: 0.75 },
+  "perso": { tristezza: 0.60 },
+  "mancanza": { tristezza: 0.65 },
+  "nostalgia": { tristezza: 0.70 },
+  "rimpianto": { tristezza: 0.70 },
+  "rimpiango": { tristezza: 0.70 },
+  "depresso": { tristezza: 0.90 },
+  "depressione": { tristezza: 0.90 },
+  "abbattuto": { tristezza: 0.80 },
+  "demoralizzato": { tristezza: 0.80 },
+  "sconsolato": { tristezza: 0.85 },
+  "sconforto": { tristezza: 0.80 },
+  "avvilito": { tristezza: 0.75 },
+  "avvilimento": { tristezza: 0.75 },
+  "mesto": { tristezza: 0.70 },
+  "afflitto": { tristezza: 0.75 },
+  "afflizione": { tristezza: 0.75 },
+  "inconsolabile": { tristezza: 0.90 },
+  "disperato": { tristezza: 0.85, paura: 0.20 },
+  "disperazione": { tristezza: 0.85, paura: 0.20 },
+  "fallimento": { tristezza: 0.70 },
+  "fallito": { tristezza: 0.70 },
+  "solo": { tristezza: 0.65 },
+  "solitudine": { tristezza: 0.70 },
+  "abbandonato": { tristezza: 0.80 },
+  "abbandono": { tristezza: 0.75 },
+  "morte": { tristezza: 0.80, paura: 0.30 },
+  "morire": { tristezza: 0.75, paura: 0.30 },
+  "sad": { tristezza: 0.90 },
+  "sadness": { tristezza: 0.95 },
+  "grief": { tristezza: 0.90 },
+  "pesante": { tristezza: 0.45 },
+  "pesa": { tristezza: 0.40 },
+  "spalle": { tristezza: 0.20 },
+
+  // ── PAURA ───────────────────────────────────────────────────────────────────
+  "paura": { paura: 0.95 },
+  "pauro": { paura: 0.85 },
+  "spavento": { paura: 0.85 },
+  "spaventato": { paura: 0.85 },
+  "terrore": { paura: 0.95 },
+  "terrorizzato": { paura: 0.95 },
+  "orrore": { paura: 0.90, disgusto: 0.30 },
+  "orrido": { paura: 0.70, disgusto: 0.50 },
+  "panico": { paura: 0.90 },
+  "ansia": { paura: 0.80 },
+  "ansioso": { paura: 0.75 },
+  "angoscia": { paura: 0.85 },
+  "angosciato": { paura: 0.85 },
+  "angosciante": { paura: 0.80 },
+  "tremare": { paura: 0.75 },
+  "tremo": { paura: 0.75 },
+  "tremore": { paura: 0.75 },
+  "timore": { paura: 0.80 },
+  "timoroso": { paura: 0.75 },
+  "fobia": { paura: 0.90 },
+  "incubo": { paura: 0.85 },
+  "minaccia": { paura: 0.70, rabbia: 0.20 },
+  "pericoloso": { paura: 0.75 },
+  "pericolo": { paura: 0.80 },
+  "vulnerabile": { paura: 0.65 },
+  "impotente": { paura: 0.55, tristezza: 0.35 },
+  "fear": { paura: 0.95 },
+  "afraid": { paura: 0.85 },
+  "scared": { paura: 0.85 },
+  "phobia": { paura: 0.90 },
+
+  // ── RABBIA ──────────────────────────────────────────────────────────────────
+  "rabbia": { rabbia: 0.95 },
+  "arrabbiato": { rabbia: 0.90 },
+  "ira": { rabbia: 0.90 },
+  "irato": { rabbia: 0.90 },
+  "furioso": { rabbia: 0.95 },
+  "furia": { rabbia: 0.95 },
+  "collera": { rabbia: 0.90 },
+  "odio": { rabbia: 0.85, disgusto: 0.40 },
+  "odioso": { rabbia: 0.75, disgusto: 0.35 },
+  "rancore": { rabbia: 0.80 },
+  "risentimento": { rabbia: 0.75 },
+  "sdegno": { rabbia: 0.75, disgusto: 0.35 },
+  "sdegnato": { rabbia: 0.75, disgusto: 0.35 },
+  "indignato": { rabbia: 0.80 },
+  "indignazione": { rabbia: 0.80 },
+  "aggressivo": { rabbia: 0.85 },
+  "aggressione": { rabbia: 0.85 },
+  "violento": { rabbia: 0.80 },
+  "violenza": { rabbia: 0.80 },
+  "urlo": { rabbia: 0.75 },
+  "urlare": { rabbia: 0.75 },
+  "gridare": { rabbia: 0.70 },
+  "insopportabile": { rabbia: 0.60, disgusto: 0.30 },
+  "frustrato": { rabbia: 0.70 },
+  "frustrazione": { rabbia: 0.70 },
+  "anger": { rabbia: 0.95 },
+  "angry": { rabbia: 0.90 },
+  "rage": { rabbia: 0.95 },
+  "hate": { rabbia: 0.85, disgusto: 0.40 },
+  "detesto": { rabbia: 0.75, disgusto: 0.50 },
+  "detestare": { rabbia: 0.75, disgusto: 0.50 },
+
+  // ── DISGUSTO ────────────────────────────────────────────────────────────────
+  "disgusto": { disgusto: 0.95 },
+  "disgustoso": { disgusto: 0.90 },
+  "ripugnante": { disgusto: 0.90 },
+  "ripugnanza": { disgusto: 0.90 },
+  "nausea": { disgusto: 0.85 },
+  "nauseabondo": { disgusto: 0.85 },
+  "schifo": { disgusto: 0.90 },
+  "schifoso": { disgusto: 0.90 },
+  "rivoltante": { disgusto: 0.85 },
+  "ributtante": { disgusto: 0.85 },
+  "orrendo": { disgusto: 0.80, paura: 0.20 },
+  "repellente": { disgusto: 0.85 },
+  "abominevole": { disgusto: 0.90 },
+  "vomitevole": { disgusto: 0.90 },
+  "immondizia": { disgusto: 0.75 },
+  "corruzione": { disgusto: 0.70, rabbia: 0.30 },
+  "disgust": { disgusto: 0.95 },
+  "gross": { disgusto: 0.75 },
+
+  // ── SORPRESA ────────────────────────────────────────────────────────────────
+  "sorpresa": { sorpresa: 0.95 },
+  "sorpreso": { sorpresa: 0.90 },
+  "stupore": { sorpresa: 0.85 },
+  "stupito": { sorpresa: 0.85 },
+  "meraviglia": { sorpresa: 0.80, gioia: 0.30 },
+  "meravigliato": { sorpresa: 0.80, gioia: 0.30 },
+  "incredibile": { sorpresa: 0.70 },
+  "inaspettato": { sorpresa: 0.80 },
+  "imprevisto": { sorpresa: 0.80 },
+  "sbalordito": { sorpresa: 0.85 },
+  "sbalordimento": { sorpresa: 0.85 },
+  "stupefatto": { sorpresa: 0.90 },
+  "attonito": { sorpresa: 0.85 },
+  "sgomento": { sorpresa: 0.60, paura: 0.40 },
+  "improvviso": { sorpresa: 0.60 },
+  "improvvisamente": { sorpresa: 0.50 },
+  "sorprendente": { sorpresa: 0.80 },
+  "wow": { sorpresa: 0.90, gioia: 0.30 },
+  "oddio": { sorpresa: 0.70 },
+  "cavolo": { sorpresa: 0.50, rabbia: 0.20 },
+  "incredulo": { sorpresa: 0.75 },
+  "surprise": { sorpresa: 0.95 },
+  "surprised": { sorpresa: 0.90 },
+  "astonished": { sorpresa: 0.90 },
+
+  // ── FIDUCIA ─────────────────────────────────────────────────────────────────
+  "fiducia": { fiducia: 0.95 },
+  "sicuro": { fiducia: 0.80 },
+  "sicurezza": { fiducia: 0.80 },
+  "fede": { fiducia: 0.85 },
+  "credere": { fiducia: 0.75 },
+  "speranza": { fiducia: 0.75, anticipazione: 0.40 },
+  "sperare": { fiducia: 0.70, anticipazione: 0.40 },
+  "ottimismo": { fiducia: 0.75, anticipazione: 0.35 },
+  "ottimista": { fiducia: 0.70, anticipazione: 0.35 },
+  "calmo": { fiducia: 0.70 },
+  "calma": { fiducia: 0.70 },
+  "serenità": { fiducia: 0.80, gioia: 0.30 },
+  "sereno": { fiducia: 0.80, gioia: 0.30 },
+  "tranquillo": { fiducia: 0.70 },
+  "tranquillità": { fiducia: 0.70 },
+  "fiducioso": { fiducia: 0.90 },
+  "affidabile": { fiducia: 0.80 },
+  "lealtà": { fiducia: 0.80 },
+  "leale": { fiducia: 0.80 },
+  "amato": { fiducia: 0.75, gioia: 0.45 },
+  "trust": { fiducia: 0.95 },
+  "confident": { fiducia: 0.80 },
+  "andrà": { fiducia: 0.40, anticipazione: 0.30 },
+  "meglio": { fiducia: 0.35, gioia: 0.20 },
+
+  // ── ANTICIPAZIONE ───────────────────────────────────────────────────────────
+  "anticipazione": { anticipazione: 0.95 },
+  "attesa": { anticipazione: 0.85 },
+  "aspettativa": { anticipazione: 0.85 },
+  "aspetto": { anticipazione: 0.70 },
+  "aspettare": { anticipazione: 0.70 },
+  "curiosità": { anticipazione: 0.75 },
+  "curioso": { anticipazione: 0.75 },
+  "eccitato": { anticipazione: 0.75, gioia: 0.40 },
+  "eccitazione": { anticipazione: 0.75, gioia: 0.40 },
+  "brama": { anticipazione: 0.80, gioia: 0.20 },
+  "bramare": { anticipazione: 0.80 },
+  "desiderio": { anticipazione: 0.75, gioia: 0.25 },
+  "desiderare": { anticipazione: 0.75 },
+  "voglio": { anticipazione: 0.65 },
+  "voglia": { anticipazione: 0.65 },
+  "progetto": { anticipazione: 0.60 },
+  "piano": { anticipazione: 0.55 },
+  "pronto": { anticipazione: 0.55, fiducia: 0.30 },
+  "domani": { anticipazione: 0.50 },
+  "futuro": { anticipazione: 0.60 },
+  "impaziente": { anticipazione: 0.80 },
+  "impazientemente": { anticipazione: 0.80 },
+  "anticipation": { anticipazione: 0.95 },
+  "excitement": { anticipazione: 0.80, gioia: 0.40 }
+};
+
+/** Avverbi di intensità: moltiplicatori di peso */
+const INTENSIFIERS = {
+  "molto": 1.5, "moltissimo": 1.8, "estremamente": 1.9, "assolutamente": 1.7,
+  "incredibilmente": 1.7, "davvero": 1.4, "veramente": 1.4, "totalmente": 1.6,
+  "completamente": 1.6, "profondamente": 1.6, "terribilmente": 1.7,
+  "enormemente": 1.6, "oltremodo": 1.5, "talmente": 1.4, "così": 1.3,
+  "troppo": 1.5, "super": 1.5, "ultra": 1.6, "iper": 1.6,
+  "abbastanza": 1.1, "alquanto": 1.1, "piuttosto": 1.1, "un po": 0.7,
+  "leggermente": 0.65, "lievemente": 0.65, "appena": 0.55, "quasi": 0.7,
+  "poco": 0.6
+};
+
+/** Negatori: invertono i pesi verso l'emozione opposta */
+const NEGATORS = new Set([
+  "non", "niente", "nessun", "nessuno", "nessuna", "mai", "né", "ne",
+  "senza", "no", "not", "never", "no", "neppure", "nemmeno", "neanche"
+]);
+
+/**
+ * Mappa inversa Plutchik: quale emozione è l'opposta
+ */
+const PLUTCHIK_OPPOSITES = {
+  gioia: "tristezza",
+  tristezza: "gioia",
+  paura: "rabbia",
+  rabbia: "paura",
+  disgusto: "fiducia",
+  fiducia: "disgusto",
+  sorpresa: "anticipazione",
+  anticipazione: "sorpresa"
+};
+
+/**
+ * Analizza un testo libero e restituisce un vettore normalizzato di score emotivi.
+ * @param {string} text
+ * @returns {{ scores: Object<string,number>, dominant: string, confidence: number, vector: Object<string,number> }}
+ */
+function analyzeTextEmotion(text) {
+  if (!text || !text.trim()) return null;
+
+  const rawScores = {
+    gioia: 0, tristezza: 0, paura: 0, rabbia: 0,
+    disgusto: 0, sorpresa: 0, fiducia: 0, anticipazione: 0
+  };
+
+  // Tokenize: lowercase, strip punctuation (but track exclamation/question marks separately)
+  const exclamations = (text.match(/!/g) || []).length;
+  const questions = (text.match(/\?/g) || []).length;
+  const upperRatio = (text.replace(/[^A-Z]/g, '').length) / Math.max(text.replace(/[^a-zA-Z]/g, '').length, 1);
+
+  const clean = text.toLowerCase()
+    .replace(/['''`]/g, '') // normalize apostrophes
+    .replace(/[^a-zàáèéìíòóùúA-Z0-9\s]/g, ' ');
+
+  const tokens = clean.split(/\s+/).filter(t => t.length > 1);
+  const totalTokens = tokens.length;
+
+  let intensifierMultiplier = 1.0;
+  let negationActive = false;
+  let negationTokensLeft = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+
+    // Check for negators (affect next 2-3 content words)
+    if (NEGATORS.has(token)) {
+      negationActive = true;
+      negationTokensLeft = 3;
+      continue;
+    }
+
+    // Decrement negation window
+    if (negationActive) {
+      negationTokensLeft--;
+      if (negationTokensLeft <= 0) negationActive = false;
+    }
+
+    // Check for intensifiers (affect next content word)
+    if (INTENSIFIERS[token] !== undefined) {
+      intensifierMultiplier = INTENSIFIERS[token];
+      continue;
+    }
+
+    // Check two-word tokens (e.g. "un po")
+    const bigramKey = i > 0 ? tokens[i-1] + ' ' + token : null;
+
+    let entry = EMOTION_LEXICON[token] || (bigramKey ? EMOTION_LEXICON[bigramKey] : null);
+
+    if (entry) {
+      for (const [emotion, weight] of Object.entries(entry)) {
+        let adjusted = weight * intensifierMultiplier;
+
+        if (negationActive) {
+          // Flip to opposite
+          const opposite = PLUTCHIK_OPPOSITES[emotion];
+          if (opposite) {
+            rawScores[opposite] += adjusted * 0.8;
+          } else {
+            rawScores[emotion] -= adjusted * 0.5;
+          }
+        } else {
+          rawScores[emotion] = (rawScores[emotion] || 0) + adjusted;
+        }
+      }
+    }
+
+    // Reset intensifier after use
+    intensifierMultiplier = 1.0;
+  }
+
+  // Punctuation bonuses
+  if (exclamations > 0) {
+    const boost = Math.min(exclamations * 0.3, 1.0);
+    // Find current dominant before boost and amplify it
+    const maxKey = Object.keys(rawScores).reduce((a, b) => rawScores[a] > rawScores[b] ? a : b);
+    rawScores[maxKey] += boost;
+  }
+  if (upperRatio > 0.3) {
+    // ALL CAPS suggests strong intensity — amplify dominant
+    const maxKey = Object.keys(rawScores).reduce((a, b) => rawScores[a] > rawScores[b] ? a : b);
+    rawScores[maxKey] *= 1.3;
+  }
+
+  // Clamp negatives to 0
+  for (const k of Object.keys(rawScores)) {
+    rawScores[k] = Math.max(0, rawScores[k]);
+  }
+
+  const total = Object.values(rawScores).reduce((s, v) => s + v, 0);
+
+  // If no signal found at all, return null
+  if (total < 0.05) return null;
+
+  // Normalize
+  const normalized = {};
+  for (const [k, v] of Object.entries(rawScores)) {
+    normalized[k] = v / total;
+  }
+
+  // Find dominant
+  const dominant = Object.keys(normalized).reduce((a, b) => normalized[a] > normalized[b] ? a : b);
+  const confidence = normalized[dominant];
+
+  return {
+    scores: rawScores,
+    vector: normalized,
+    dominant,
+    confidence
+  };
+}
+
+/**
+ * Data l'analisi NLP, trova nel dataset la emozione con il cosine similarity
+ * più alta rispetto al vettore Plutchik risultante.
+ */
+function findBestDatasetMatch(analysisResult) {
+  if (!analysisResult || emotionsDataset.length === 0) return null;
+
+  const queryVec = analysisResult.vector;
+
+  let bestScore = -1;
+  let bestItem = null;
+
+  for (const item of emotionsDataset) {
+    const weights = item.plutchik?.weights;
+    if (!weights) continue;
+
+    // Cosine similarity between query vector and item weight vector
+    let dot = 0, magQ = 0, magI = 0;
+    for (const key of Object.keys(queryVec)) {
+      const q = queryVec[key] || 0;
+      const iw = weights[key] || 0;
+      dot += q * iw;
+      magQ += q * q;
+      magI += iw * iw;
+    }
+    const sim = (magQ > 0 && magI > 0) ? dot / (Math.sqrt(magQ) * Math.sqrt(magI)) : 0;
+
+    if (sim > bestScore) {
+      bestScore = sim;
+      bestItem = item;
+    }
+  }
+
+  return bestItem;
+}
+
+// ============================================================================
+// 11. ANALISI FRASE — MODAL CONTROLLER
+// ============================================================================
+
+let lastAnalyzedEmotion = null;
+
+function initAnalyzeModal() {
+  const btnToggle   = document.getElementById('btn-analyze-toggle');
+  const modal       = document.getElementById('modal-analyze');
+  const btnClose    = document.getElementById('btn-close-analyze');
+  const textarea    = document.getElementById('analyze-textarea');
+  const charCount   = document.getElementById('analyze-char-count');
+  const btnAnalyze  = document.getElementById('btn-do-analyze');
+  const btnApply    = document.getElementById('btn-apply-analyzed');
+
+  btnToggle.addEventListener('click', () => {
+    modal.classList.add('open');
+    textarea.focus();
+  });
+
+  btnClose.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+  textarea.addEventListener('input', () => {
+    const len = textarea.value.length;
+    charCount.textContent = len;
+    btnAnalyze.disabled = len < 3;
+  });
+
+  btnAnalyze.addEventListener('click', () => {
+    runAnalysis(textarea.value);
+  });
+
+  textarea.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (textarea.value.length >= 3) runAnalysis(textarea.value);
+    }
+  });
+
+  btnApply.addEventListener('click', () => {
+    if (lastAnalyzedEmotion) {
+      applyEmotion(lastAnalyzedEmotion, true);
+      const input = document.getElementById('emotion-input');
+      if (input) input.value = lastAnalyzedEmotion.termine_originale;
+      modal.classList.remove('open');
+    }
+  });
+}
+
+function runAnalysis(text) {
+  const results = document.getElementById('analyze-results');
+  const btnAnalyze = document.getElementById('btn-do-analyze');
+
+  // Animate button state
+  btnAnalyze.textContent = 'Analizzando...';
+  btnAnalyze.disabled = true;
+
+  // Small delay to allow repaint (gives perception of computation)
+  setTimeout(() => {
+    const analysis = analyzeTextEmotion(text);
+
+    btnAnalyze.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg> Analizza emozione`;
+    btnAnalyze.disabled = false;
+
+    if (!analysis) {
+      renderAnalysisNoResult();
+      results.style.display = 'block';
+      return;
+    }
+
+    const matchedEmotion = findBestDatasetMatch(analysis);
+    lastAnalyzedEmotion = matchedEmotion;
+
+    renderAnalysisResult(analysis, matchedEmotion);
+    results.style.display = 'block';
+
+    // Scroll results into view
+    results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 350);
+}
+
+function renderAnalysisNoResult() {
+  document.getElementById('analyze-detected-name').textContent = 'Segnale troppo debole';
+  document.getElementById('analyze-detected-sub').textContent = 'Prova a scrivere più parole cariche di emozione.';
+  document.getElementById('analyze-bars').innerHTML = '<p style="color: #64748b; font-size: 0.8rem;">Nessun vettore rilevato.</p>';
+  document.getElementById('analyze-match-card').innerHTML = '';
+  document.getElementById('ring-pct').textContent = '0%';
+
+  const ring = document.getElementById('ring-progress');
+  ring.style.stroke = '#6366f1';
+  ring.setAttribute('stroke-dashoffset', '113.1');
+
+  const banner = document.getElementById('analyze-detected-banner');
+  banner.style.borderColor = 'rgba(255,255,255,0.1)';
+  banner.style.background = 'rgba(255,255,255,0.03)';
+}
+
+function renderAnalysisResult(analysis, matchedEmotion) {
+  const pk = PLUTCHIK_PRIMARIES[analysis.dominant];
+  const emotionColor = pk?.color || '#8b5cf6';
+  const emotionName = pk?.it || analysis.dominant;
+  const confidence = Math.round(analysis.confidence * 100);
+
+  // ─── Banner with emotion name ────────────────────────────────────────────
+  const banner = document.getElementById('analyze-detected-banner');
+  banner.style.borderColor = emotionColor + '80';
+  banner.style.background = emotionColor + '12';
+
+  document.getElementById('analyze-detected-name').textContent = emotionName;
+  document.getElementById('analyze-detected-name').style.color = emotionColor;
+
+  const subText = matchedEmotion
+    ? `Corrisponde a: ${matchedEmotion.termine_originale} · ${matchedEmotion.famiglia_emotiva}`
+    : 'Emozione primaria rilevata';
+  document.getElementById('analyze-detected-sub').textContent = subText;
+
+  // ─── Confidence ring ─────────────────────────────────────────────────────
+  const circumference = 113.1;
+  const offset = circumference - (confidence / 100) * circumference;
+  const ring = document.getElementById('ring-progress');
+  ring.style.stroke = emotionColor;
+  ring.setAttribute('stroke-dashoffset', offset.toFixed(1));
+  document.getElementById('ring-pct').textContent = confidence + '%';
+  document.getElementById('ring-pct').style.color = emotionColor;
+
+  // ─── Plutchik bars ───────────────────────────────────────────────────────
+  const barsContainer = document.getElementById('analyze-bars');
+  barsContainer.innerHTML = '';
+
+  const sortedVec = Object.entries(analysis.vector)
+    .sort((a, b) => b[1] - a[1])
+    .filter(([, v]) => v > 0.01);
+
+  sortedVec.forEach(([key, val]) => {
+    const info = PLUTCHIK_PRIMARIES[key];
+    if (!info) return;
+    const pct = Math.round(val * 100);
+    const bar = document.createElement('div');
+    bar.className = 'vector-row';
+    bar.innerHTML = `
+      <span class="vector-name" style="color: ${info.color}">${info.it}</span>
+      <div class="vector-bar-wrap">
+        <div class="vector-bar-fill" style="width: ${pct}%; background: ${info.color}"></div>
+      </div>
+      <span class="vector-pct">${pct}%</span>
+    `;
+    barsContainer.appendChild(bar);
+  });
+
+  // ─── Matched dataset emotion card ────────────────────────────────────────
+  const matchCard = document.getElementById('analyze-match-card');
+  if (matchedEmotion) {
+    const mpk = matchedEmotion.plutchik;
+    matchCard.innerHTML = `
+      <div class="analyze-match-header">
+        <div class="item-dot" style="background: ${mpk.color}; width:10px; height:10px; border-radius:50%; flex-shrink:0"></div>
+        <strong style="color: ${mpk.color}">${matchedEmotion.termine_originale}</strong>
+        <span style="color: #94a3b8; font-size: 0.72rem">${matchedEmotion.lingua_cultura.split('/')[0]}</span>
+      </div>
+      <p style="color: #94a3b8; font-size: 0.78rem; line-height: 1.5; margin-top: 6px">
+        ${matchedEmotion.significato_italiano.substring(0, 180)}${matchedEmotion.significato_italiano.length > 180 ? '…' : ''}
+      </p>
+      <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap">
+        <span class="tag tag-valenza-${matchedEmotion.valenza}" style="font-size:0.68rem">Valenza: ${matchedEmotion.valenza}</span>
+        <span class="tag" style="font-size:0.68rem">Arousal: ${matchedEmotion.arousal}</span>
+      </div>
+    `;
+  } else {
+    matchCard.innerHTML = '<p style="color: #64748b; font-size: 0.8rem;">Nessuna corrispondenza trovata nel dataset.</p>';
+  }
+}
+
+
+// ============================================================================
+// 12. IMAGE EMOTION ANALYSIS (Gemini Vision API)
+// ============================================================================
+
+/** Gemini API key preconfigurata */
+let geminiApiKey = 'AQ.Ab8RN6JlUM9X5yP8kZsfY2WH7kG4-PO2Jhpx3oRkU05fmLV60g';
+
+/** Last image-analysis result — used when "Apply" button is pressed */
+let lastImageAnalysisResult = null;
+
+/**
+ * Read a File object as a base64-encoded string (without the data-URI prefix).
+ */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Call Gemini 2.0 Flash (multimodal) to analyse an image for emotional content.
+ * @param {string} apiKey  Gemini API key
+ * @param {string} base64Image  Base64-encoded image data (no data-URI prefix)
+ * @param {string} mimeType  MIME type of the image (e.g. "image/jpeg")
+ * @returns {Promise<Object>} Parsed JSON result from the model
+ */
+async function callGeminiVision(apiKey, base64Image, mimeType) {
+  const PROMPT = `
+Sei un esperto di psicologia delle emozioni specializzato nella ruota di Plutchik.
+
+Analizza attentamente questa immagine e identifica l'emozione umana predominante che emerge dal contenuto visivo (espressioni facciali, postura, contesto, colori, simbolismo, ecc.).
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido (senza markdown, senza testo aggiuntivo) che rispetta questo schema:
+{
+  "emotion": "<nome dell'emozione in italiano>",
+  "confidence": <numero da 0 a 1>,
+  "description": "<frase breve in italiano che spiega cosa hai visto>",
+  "plutchik_weights": {
+    "gioia": <0-1>,
+    "fiducia": <0-1>,
+    "paura": <0-1>,
+    "sorpresa": <0-1>,
+    "tristezza": <0-1>,
+    "disgusto": <0-1>,
+    "rabbia": <0-1>,
+    "anticipazione": <0-1>
+  },
+  "valenza": "<'positiva' | 'negativa' | 'neutra'>",
+  "arousal": "<'alto' | 'medio' | 'basso'>"
+}
+I valori di plutchik_weights devono sommare a circa 1.0.`.trim();
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{
+      parts: [
+        { text: PROMPT },
+        { inline_data: { mime_type: mimeType, data: base64Image } }
+      ]
+    }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 512 }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({}));
+    throw new Error(`Gemini API error: ${errBody?.error?.message || 'HTTP ' + response.status}`);
+  }
+
+  const data = await response.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Strip optional markdown code fences
+  const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Risposta non parsabile:\n${rawText.slice(0, 300)}`);
+  }
+}
+
+/**
+ * Render Gemini's image-analysis result into the modal UI and store the
+ * resulting emotionObj so it can be applied to the 3D entity.
+ */
+function renderImageAnalysisResults(result) {
+  lastImageAnalysisResult = null;
+
+  const weights = result.plutchik_weights || {};
+
+  // Determine dominant Plutchik dimension
+  let dominantKey = 'gioia', maxW = -1;
+  for (const [k, w] of Object.entries(weights)) {
+    if (w > maxW) { maxW = w; dominantKey = k; }
+  }
+
+  const pk = PLUTCHIK_PRIMARIES[dominantKey] || PLUTCHIK_PRIMARIES.gioia;
+
+  // Try to find a real dataset match
+  let datasetMatch =
+    emotionsDataset.find(e =>
+      e.plutchik?.primary === dominantKey &&
+      (e.termine_originale.toLowerCase() === result.emotion.toLowerCase() ||
+       e.famiglia_emotiva.toLowerCase() === result.emotion.toLowerCase())
+    ) ||
+    emotionsDataset.find(e => e.plutchik?.primary === dominantKey);
+
+  // Build the emotionObj to apply to the 3D entity
+  const emotionObj = datasetMatch ? { ...datasetMatch } : {
+    termine_originale: result.emotion,
+    lingua_cultura: 'Visione Artificiale / Gemini',
+    famiglia_emotiva: pk.it,
+    significato_italiano: result.description,
+    valenza: result.valenza || 'neutra',
+    arousal: result.arousal || 'medio',
+    modello_fonte: 'Google Gemini Vision',
+    plutchik: null
+  };
+
+  // Always override plutchik data with Gemini's weights for visual accuracy
+  emotionObj.plutchik = {
+    primary: dominantKey,
+    primary_it: pk.it,
+    secondary: null,
+    secondary_it: null,
+    weights,
+    color: pk.color,
+    glow: pk.glow,
+    core: pk.core,
+    angle: pk.angle,
+    physics: { ...pk.physics }
+  };
+
+  lastImageAnalysisResult = emotionObj;
+
+  // ── Confidence ring ───────────────────────────────────────────────────────
+  const confidence = Math.max(0, Math.min(1, result.confidence || 0.75));
+  const pct = Math.round(confidence * 100);
+  const offset = (113.1 * (1 - confidence)).toFixed(1);
+
+  const ringEl = document.getElementById('img-ring-progress');
+  const ringPctEl = document.getElementById('img-ring-pct');
+  if (ringEl) { ringEl.setAttribute('stroke-dashoffset', offset); ringEl.style.stroke = pk.color; }
+  if (ringPctEl) { ringPctEl.textContent = `${pct}%`; ringPctEl.style.color = pk.color; }
+
+  const banner = document.getElementById('img-detected-banner');
+  if (banner) { banner.style.borderColor = pk.color + '55'; banner.style.background = pk.color + '12'; }
+
+  const nameEl = document.getElementById('img-detected-name');
+  if (nameEl) { nameEl.textContent = result.emotion; nameEl.style.color = pk.color; }
+
+  const subEl = document.getElementById('img-detected-sub');
+  if (subEl) subEl.textContent = `${(result.valenza || '').toUpperCase()} • Arousal: ${(result.arousal || '').toUpperCase()} • ${pk.it}`;
+
+  const descEl = document.getElementById('img-ai-desc');
+  if (descEl) descEl.textContent = `\u00ab ${result.description} \u00bb`;
+
+  // ── Plutchik bars ─────────────────────────────────────────────────────────
+  const barsEl = document.getElementById('img-analyze-bars');
+  if (barsEl) {
+    barsEl.innerHTML = '';
+    Object.entries(weights).sort((a, b) => b[1] - a[1]).forEach(([key, w]) => {
+      const info = PLUTCHIK_PRIMARIES[key];
+      if (!info) return;
+      const wPct = Math.round(w * 100);
+      const row = document.createElement('div');
+      row.className = 'vector-row';
+      row.innerHTML = `
+        <span class="vector-name" style="color:${info.color}">${info.it}</span>
+        <div class="vector-bar-wrap">
+          <div class="vector-bar-fill" style="width:${wPct}%; background:${info.color}"></div>
+        </div>
+        <span class="vector-pct">${wPct}%</span>`;
+      barsEl.appendChild(row);
+    });
+  }
+
+  // ── Dataset match card ────────────────────────────────────────────────────
+  const matchCard = document.getElementById('img-analyze-match-card');
+  if (matchCard) {
+    if (datasetMatch) {
+      matchCard.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <span style="font-weight:700;font-size:0.95rem;color:#fff">${datasetMatch.termine_originale}</span>
+          <span style="font-size:0.68rem;color:var(--text-dim);font-family:monospace">${datasetMatch.lingua_cultura.split('/')[0]}</span>
+        </div>
+        <div style="font-size:0.72rem;margin-bottom:6px;color:${pk.color}">\u25cf ${datasetMatch.famiglia_emotiva}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.4">${datasetMatch.significato_italiano}</div>`;
+    } else {
+      matchCard.innerHTML = `<div style="font-size:0.78rem;color:var(--text-dim);font-style:italic">Nessuna corrispondenza esatta nel dataset \u2014 verr\u00e0 usata la voce sintetica generata dall'IA.</div>`;
+    }
+  }
+
+  // Show results panel
+  const resultsEl = document.getElementById('img-analyze-results');
+  if (resultsEl) {
+    resultsEl.style.display = 'block';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+/**
+ * Initialize all event listeners for the image emotion analysis modal.
+ */
+function initImageAnalyzeModal() {
+  const modal          = document.getElementById('modal-image-analyze');
+  const btnToggle      = document.getElementById('btn-image-analyze-toggle');
+  const btnClose       = document.getElementById('btn-close-image-analyze');
+  const fileInput      = document.getElementById('img-file-input');
+  const dropzone       = document.getElementById('img-dropzone');
+  const btnChooseFile  = document.getElementById('btn-choose-file');
+  const previewSection = document.getElementById('img-preview-section');
+  const previewImg     = document.getElementById('img-preview');
+  const filenameEl     = document.getElementById('img-filename');
+  const btnRemoveImg   = document.getElementById('btn-remove-img');
+  const btnDoAnalyze   = document.getElementById('btn-do-image-analyze');
+  const statusEl       = document.getElementById('img-status');
+  const statusText     = document.getElementById('img-status-text');
+  const errorEl        = document.getElementById('img-error');
+  const resultsEl      = document.getElementById('img-analyze-results');
+  const btnApply       = document.getElementById('btn-apply-img-analyzed');
+  const apiKeyInput    = document.getElementById('img-api-key-input');
+  const btnSaveKey     = document.getElementById('btn-save-api-key');
+
+  if (!modal) return;
+
+  let currentFile = null;
+
+  // ── Open / Close ──────────────────────────────────────────────────────────
+  if (btnToggle) {
+    btnToggle.addEventListener('click', () => {
+      modal.classList.add('open');
+      btnToggle.classList.add('active');
+    });
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    if (btnToggle) btnToggle.classList.remove('active');
+  }
+
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  // ── API Key ───────────────────────────────────────────────────────────────
+  if (apiKeyInput && geminiApiKey) {
+    apiKeyInput.value = geminiApiKey;
+    if (btnSaveKey) {
+      btnSaveKey.textContent = '\u2713 Attiva';
+      btnSaveKey.classList.add('saved');
+    }
+  }
+
+  function updateAnalyzeBtn() {
+    if (btnDoAnalyze) btnDoAnalyze.disabled = !(currentFile && geminiApiKey);
+  }
+
+  if (btnSaveKey && apiKeyInput) {
+    btnSaveKey.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) return;
+      geminiApiKey = key;
+      btnSaveKey.textContent = '\u2713 Salvata';
+      btnSaveKey.classList.add('saved');
+      updateAnalyzeBtn();
+      setTimeout(() => {
+        btnSaveKey.textContent = '\u2713 Attiva';
+      }, 2000);
+    });
+    apiKeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') btnSaveKey.click(); });
+  }
+
+  // ── File Handling ─────────────────────────────────────────────────────────
+  function showError(msg) {
+    if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+  }
+
+  function handleFile(file) {
+    if (!file?.type.startsWith('image/')) { showError("Il file non \u00e8 un'immagine valida."); return; }
+    if (file.size > 10 * 1024 * 1024) { showError('File troppo grande (max 10 MB).'); return; }
+
+    currentFile = file;
+    if (previewImg) previewImg.src = URL.createObjectURL(file);
+    if (filenameEl) filenameEl.textContent = file.name;
+    if (previewSection) previewSection.style.display = 'flex';
+    if (dropzone) dropzone.style.display = 'none';
+    if (resultsEl) resultsEl.style.display = 'none';
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+    lastImageAnalysisResult = null;
+    updateAnalyzeBtn();
+  }
+
+  function removeImage() {
+    currentFile = null;
+    if (previewImg) previewImg.src = '';
+    if (previewSection) previewSection.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'flex';
+    if (fileInput) fileInput.value = '';
+    if (resultsEl) resultsEl.style.display = 'none';
+    if (errorEl) { errorEl.style.display = 'none'; }
+    lastImageAnalysisResult = null;
+    updateAnalyzeBtn();
+  }
+
+  if (btnChooseFile) btnChooseFile.addEventListener('click', e => { e.stopPropagation(); fileInput?.click(); });
+  if (dropzone) dropzone.addEventListener('click', () => fileInput?.click());
+  if (fileInput) fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  if (btnRemoveImg) btnRemoveImg.addEventListener('click', e => { e.stopPropagation(); removeImage(); });
+
+  // Drag-and-drop
+  if (dropzone) {
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+  }
+
+  // ── Run Analysis ──────────────────────────────────────────────────────────
+  if (btnDoAnalyze) {
+    btnDoAnalyze.addEventListener('click', async () => {
+      if (!currentFile || !geminiApiKey) return;
+
+      if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+      if (resultsEl) resultsEl.style.display = 'none';
+      if (statusEl) statusEl.style.display = 'flex';
+      if (statusText) statusText.textContent = 'Codifica immagine\u2026';
+      btnDoAnalyze.disabled = true;
+
+      try {
+        const b64 = await fileToBase64(currentFile);
+        if (statusText) statusText.textContent = 'Consultando Gemini Vision\u2026';
+        const result = await callGeminiVision(geminiApiKey, b64, currentFile.type || 'image/jpeg');
+        if (statusEl) statusEl.style.display = 'none';
+        renderImageAnalysisResults(result);
+      } catch (err) {
+        showError(`Errore durante l'analisi:\n${err.message}`);
+      } finally {
+        updateAnalyzeBtn();
+        if (statusEl) statusEl.style.display = 'none';
+      }
+    });
+  }
+
+  // ── Apply to entity ───────────────────────────────────────────────────────
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      if (!lastImageAnalysisResult) return;
+      applyEmotion(lastImageAnalysisResult, true);
+      const inp = document.getElementById('emotion-input');
+      if (inp) inp.value = lastImageAnalysisResult.termine_originale;
+      closeModal();
+    });
+  }
+}

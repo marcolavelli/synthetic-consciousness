@@ -111,6 +111,8 @@ Il campo di testo dell'interfaccia permette all'utente di esprimere liberamente 
 - **Mini-Radar delle Polarità**: bussola a 8 assi che indica visivamente l'inclinazione del vettore e la sua emozione diametralmente opposta.
 - **Ruota di Plutchik Interattiva** (pulsante in alto): diagramma vettoriale SVG dei petali primari con codifica colori originale; facendo clic su ciascun petalo si plasma direttamente l'entità.
 - **Catalogo Esplorabile**: archivio completo delle 90 emozioni filtrabili per categoria teorica, area geografica o valenza.
+- **Analisi Emotiva del Testo (NLP Locale)**: analizza frasi e poesie estraendo le componenti della ruota di Plutchik senza dipendenze esterne.
+- **Analisi Emotiva dell'Immagine (Visione AI)**: carica una foto, disegno o ritratto per dedurre l'emozione visiva predominante tramite intelligenza artificiale multimodale (Google Gemini Vision).
 - **Sintetizzatore Sonoro Generativo (Web Audio API)**: drone binaurale con oscillatore doppio e filtro passa-basso risonante, che adatta frequenza e modulazione all'arousal dell'emozione corrente.
 
 ---

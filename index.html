@@ -2,13 +2,15 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Stato Emotivo IA - Ruota di Plutchik</title>
   <meta name="description" content="Visualizzazione dello stato emotivo sintetico di un'intelligenza artificiale tramite una massa organica reattiva basata sul diagramma delle emozioni di Robert Plutchik.">
   
   <!-- Favicon & Mobile Theming -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23080812' stroke='%238b5cf6' stroke-width='8'/><circle cx='50' cy='50' r='20' fill='%238b5cf6'/></svg>">
   <meta name="theme-color" content="#030306">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:type" content="website">
@@ -42,7 +44,7 @@
         <div class="status-dot" id="status-indicator"></div>
         <div class="title-group">
           <h1><span class="status-title">Stato Emotivo</span> <span class="badge" id="dataset-count">Caricamento...</span></h1>
-          <p>Coscienza Sintetica • Diagramma di Plutchik</p>
+          <p class="status-sub">Coscienza Sintetica • Diagramma di Plutchik</p>
         </div>
       </div>
 
@@ -53,7 +55,7 @@
             <line x1="23" y1="9" x2="17" y2="15"></line>
             <line x1="17" y1="9" x2="23" y2="15"></line>
           </svg>
-          Audio: MUTO
+          <span class="btn-text" id="sound-btn-text">Audio: MUTO</span>
         </button>
 
         <button id="btn-plutchik-toggle" class="btn-header" title="Apri il diagramma della ruota di Plutchik">
@@ -62,7 +64,7 @@
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             <line x1="2" y1="12" x2="22" y2="12"></line>
           </svg>
-          Ruota di Plutchik
+          <span class="btn-text"><span class="desktop-only">Ruota di </span>Plutchik</span>
         </button>
 
         <button id="btn-catalog-toggle" class="btn-header" title="Sfoglia tutte le 90 emozioni del dataset">
@@ -72,48 +74,81 @@
             <rect x="14" y="14" width="7" height="7"></rect>
             <rect x="3" y="14" width="7" height="7"></rect>
           </svg>
-          Catalogo Dataset
+          <span class="btn-text"><span class="desktop-only">Catalogo </span>Dataset</span>
+        </button>
+
+        <button id="btn-analyze-toggle" class="btn-header btn-analyze-header" title="Analizza l'emozione contenuta in una frase">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span class="btn-text"><span class="desktop-only">Analizza </span>Frase</span>
+        </button>
+
+        <button id="btn-image-analyze-toggle" class="btn-header btn-image-analyze-header" title="Riconosci l'emozione da un'immagine caricata">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span class="btn-text"><span class="desktop-only">Analizza </span>Immagine</span>
         </button>
       </div>
     </header>
 
+    <!-- Mobile Backdrop for Expanded Card -->
+    <div class="card-backdrop" id="card-backdrop"></div>
+
     <!-- Center Content: Floating Emotion Card -->
     <main class="center-content">
       <section class="emotion-card" id="emotion-card">
-        <div class="emotion-card-header">
-          <h2 class="emotion-card-title" id="card-title">Vuoto Primordiale</h2>
-          <div class="emotion-culture" id="card-culture">Origine Sintetica • Stato Basale</div>
-        </div>
-
-        <div class="emotion-tags">
-          <span class="tag tag-valenza-neutra" id="tag-valenza">Valenza: neutra</span>
-          <span class="tag tag-arousal" id="tag-arousal">Arousal: basso</span>
-          <span class="tag" id="tag-family">Famiglia: Equilibrio</span>
-        </div>
-
-        <p class="emotion-meaning" id="card-meaning">
-          « L'entità sintetica si trova in una quiete primordiale. In attesa di uno stimolo emotivo umano per polarizzarsi e assumere forma. »
-        </p>
-
-        <!-- Dynamic Plutchik Breakdown -->
-        <div class="plutchik-breakdown">
-          <div class="plutchik-label">
-            <span>Composizione Ruota di Plutchik</span>
-            <span style="color: var(--emotion-color)">Vettore Attivo</span>
+        <div class="bottom-sheet-grab" aria-hidden="true"></div>
+        
+        <!-- Card Top Bar with Collapse Toggle on Mobile -->
+        <div class="emotion-card-topbar">
+          <div class="emotion-card-header">
+            <h2 class="emotion-card-title" id="card-title">Vuoto Primordiale</h2>
+            <div class="emotion-culture" id="card-culture">Origine Sintetica • Stato Basale</div>
           </div>
-          <div class="vector-bars" id="vector-bars">
-            <!-- Injected dynamically -->
+          <button id="btn-toggle-card" class="btn-toggle-card" title="Riduci/Espandi dettagli emotivi" aria-label="Riduci/Espandi dettagli">
+            <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Collapsible Body Content -->
+        <div class="emotion-card-body" id="emotion-card-body">
+          <div class="emotion-tags">
+            <span class="tag tag-valenza-neutra" id="tag-valenza">Valenza: neutra</span>
+            <span class="tag tag-arousal" id="tag-arousal">Arousal: basso</span>
+            <span class="tag" id="tag-family">Famiglia: Equilibrio</span>
+          </div>
+
+          <p class="emotion-meaning" id="card-meaning">
+            « L'entità sintetica si trova in una quiete primordiale. In attesa di uno stimolo emotivo umano per polarizzarsi e assumere forma. »
+          </p>
+
+          <!-- Dynamic Plutchik Breakdown -->
+          <div class="plutchik-breakdown">
+            <div class="plutchik-label">
+              <span>Composizione Ruota di Plutchik</span>
+              <span style="color: var(--emotion-color)">Vettore Attivo</span>
+            </div>
+            <div class="vector-bars" id="vector-bars">
+              <!-- Injected dynamically -->
+            </div>
+          </div>
+
+          <!-- Mini Radar Compass & Opposite Emotion -->
+          <div class="radar-wrapper">
+            <canvas id="radar-canvas" class="radar-canvas" width="44" height="44"></canvas>
+            <div class="radar-info">
+              <div class="radar-info-title">Polarità Diametrale</div>
+              <div class="radar-info-desc" id="radar-opposite-text">Opposto: In attesa</div>
+            </div>
           </div>
         </div>
 
-        <!-- Mini Radar Compass & Opposite Emotion -->
-        <div class="radar-wrapper">
-          <canvas id="radar-canvas" class="radar-canvas" width="44" height="44"></canvas>
-          <div class="radar-info">
-            <div class="radar-info-title">Polarità Diametrale</div>
-            <div class="radar-info-desc" id="radar-opposite-text">Opposto: In attesa</div>
-          </div>
-        </div>
       </section>
     </main>
 
@@ -136,9 +171,12 @@
             type="text" 
             id="emotion-input" 
             class="emotion-input" 
-            placeholder="Sussurra un'emozione all'IA... (es. Gioia, Saudade, Rabbia, Ikigai, Weltschmerz)" 
+            placeholder="Sussurra un'emozione... (es. Gioia, Saudade, Rabbia, Ikigai)" 
             autocomplete="off"
             spellcheck="false"
+            autocapitalize="none"
+            enterkeyhint="go"
+            inputmode="search"
           >
           <div class="input-actions">
             <button id="btn-clear" class="btn-icon" title="Cancella testo">
@@ -192,12 +230,13 @@
   <!-- MODAL: RUOTA DELLE EMOZIONI DI ROBERT PLUTCHIK -->
   <div class="modal-overlay" id="modal-plutchik">
     <div class="modal-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
       <div class="modal-header">
         <div class="modal-title-group">
           <h2>Ruota delle Emozioni di Robert Plutchik</h2>
-          <p>8 emozioni primarie, polarità opposte e diadi emozionali. Fai clic su un petalo per plasmare la massa emotiva.</p>
+          <p>8 emozioni primarie e polarità opposte. Fai clic su un petalo per plasmare la massa emotiva.</p>
         </div>
-        <button class="btn-icon" id="btn-close-plutchik">
+        <button class="btn-icon btn-modal-close" id="btn-close-plutchik" aria-label="Chiudi modale">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -218,12 +257,13 @@
   <!-- MODAL: CATALOGO COMPLETO DELLE 90 EMOZIONI -->
   <div class="modal-overlay" id="modal-catalog">
     <div class="modal-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
       <div class="modal-header">
         <div class="modal-title-group">
           <h2>Archivio Emotivo Universale (90 Emozioni)</h2>
-          <p>Dataset estratto da emotions.jsonl: tradizioni interculturali, Ekman, Plutchik e Cowen &amp; Keltner.</p>
+          <p>Dataset da emotions.jsonl: tradizioni interculturali, Ekman, Plutchik e Cowen &amp; Keltner.</p>
         </div>
-        <button class="btn-icon" id="btn-close-catalog">
+        <button class="btn-icon btn-modal-close" id="btn-close-catalog" aria-label="Chiudi modale">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -236,18 +276,240 @@
           id="catalog-search" 
           class="catalog-search-input" 
           placeholder="Cerca per nome, cultura o significato (es. malinconia, giapponese, amore)..."
+          enterkeyhint="search"
+          autocapitalize="none"
         >
         <div class="catalog-filters">
           <button class="filter-btn active" data-filter="all">Tutte (90)</button>
-          <button class="filter-btn" data-filter="plutchik">Plutchik &amp; Diadi</button>
-          <button class="filter-btn" data-filter="ekman">Ekman Primarie</button>
-          <button class="filter-btn" data-filter="cowen">Cowen &amp; Keltner (27)</button>
-          <button class="filter-btn" data-filter="cultura">Culture dal Mondo</button>
-          <button class="filter-btn" data-filter="positiva">Valenza Positiva</button>
-          <button class="filter-btn" data-filter="negativa">Valenza Negativa</button>
+          <button class="filter-btn" data-filter="plutchik">Plutchik</button>
+          <button class="filter-btn" data-filter="ekman">Ekman</button>
+          <button class="filter-btn" data-filter="cowen">Cowen &amp; Keltner</button>
+          <button class="filter-btn" data-filter="cultura">Culture Mondo</button>
+          <button class="filter-btn" data-filter="positiva">Positiva</button>
+          <button class="filter-btn" data-filter="negativa">Negativa</button>
         </div>
         <div class="catalog-grid" id="catalog-grid">
           <!-- Cards injected dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ANALISI EMOZIONE DA FRASE LIBERA -->
+  <div class="modal-overlay" id="modal-analyze">
+    <div class="modal-card modal-analyze-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Analisi Emotiva del Testo</h2>
+          <p>Scrivi una frase: l'IA riconoscerà l'emozione predominante e trasformerà la massa sintetica.</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-analyze" aria-label="Chiudi modale">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body analyze-modal-body">
+
+        <!-- Text Input Area -->
+        <div class="analyze-input-wrapper">
+          <textarea
+            id="analyze-textarea"
+            class="analyze-textarea"
+            placeholder="Scrivi qui una frase, un pensiero, una poesia...&#10;&#10;Es: «Oggi mi sento come se il mondo mi pesasse sulle spalle, ma so che andrà meglio.»"
+            rows="4"
+            spellcheck="false"
+          ></textarea>
+          <div class="analyze-char-count"><span id="analyze-char-count">0</span> caratteri</div>
+        </div>
+
+        <!-- Analyze Button -->
+        <button id="btn-do-analyze" class="btn-do-analyze" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          Analizza emozione
+        </button>
+
+        <!-- Results Panel (hidden until analysis runs) -->
+        <div class="analyze-results" id="analyze-results" style="display:none">
+
+          <!-- Detected Emotion Banner -->
+          <div class="analyze-detected-banner" id="analyze-detected-banner">
+            <div class="analyze-detected-info">
+              <div class="analyze-detected-label">Emozione rilevata</div>
+              <div class="analyze-detected-name" id="analyze-detected-name">—</div>
+              <div class="analyze-detected-sub" id="analyze-detected-sub">—</div>
+            </div>
+            <div class="analyze-confidence-ring" id="analyze-confidence-ring">
+              <svg viewBox="0 0 44 44" class="ring-svg">
+                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                <circle id="ring-progress" cx="22" cy="22" r="18" fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1"
+                  transform="rotate(-90 22 22)"/>
+              </svg>
+              <span id="ring-pct">0%</span>
+            </div>
+          </div>
+
+          <!-- Plutchik Score Bars -->
+          <div class="analyze-section-label">Vettore Plutchik rilevato</div>
+          <div class="analyze-bars" id="analyze-bars">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Matching Dataset Emotion -->
+          <div class="analyze-section-label" style="margin-top:14px">Corrispondenza nel dataset</div>
+          <div class="analyze-match-card" id="analyze-match-card">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Apply Button -->
+          <button id="btn-apply-analyzed" class="btn-apply-analyzed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Applica questa emozione all'entità sintetica
+          </button>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ANALISI EMOZIONE DA IMMAGINE -->
+  <div class="modal-overlay" id="modal-image-analyze">
+    <div class="modal-card modal-analyze-card modal-image-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Analisi Emotiva dell'Immagine</h2>
+          <p>Carica un'immagine: l'IA riconoscerà l'emozione predominante tramite visione artificiale.</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-image-analyze" aria-label="Chiudi modale">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body analyze-modal-body">
+
+        <!-- API Key Input -->
+        <div class="img-api-key-section" id="img-api-key-section">
+          <label class="img-api-label" for="img-api-key-input">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+            </svg>
+            Gemini API Key <span class="img-api-hint">(salvata solo in sessione, non inviata a terzi)</span>
+          </label>
+          <div class="img-api-row">
+            <input type="password" id="img-api-key-input" class="img-api-input" placeholder="Inserisci la tua Gemini API Key..." autocomplete="off" spellcheck="false">
+            <button id="btn-save-api-key" class="btn-save-key">Salva</button>
+          </div>
+          <div class="img-api-note">
+            Ottieni gratuitamente su <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="img-api-link">Google AI Studio →</a>
+          </div>
+        </div>
+
+        <!-- Drop Zone -->
+        <div class="img-dropzone" id="img-dropzone">
+          <input type="file" id="img-file-input" accept="image/*" style="display:none">
+          <div class="img-dropzone-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+          </div>
+          <div class="img-dropzone-text">Trascina un'immagine qui</div>
+          <div class="img-dropzone-sub">oppure</div>
+          <button class="btn-choose-file" id="btn-choose-file">Scegli file</button>
+          <div class="img-dropzone-formats">JPG · PNG · WEBP · GIF · BMP (max 10 MB)</div>
+        </div>
+
+        <!-- Image Preview -->
+        <div class="img-preview-section" id="img-preview-section" style="display:none">
+          <div class="img-preview-wrapper">
+            <img id="img-preview" class="img-preview" src="" alt="Anteprima immagine caricata">
+            <button class="btn-remove-img" id="btn-remove-img" title="Rimuovi immagine">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="img-filename" id="img-filename"></div>
+        </div>
+
+        <!-- Analyze Button -->
+        <button id="btn-do-image-analyze" class="btn-do-analyze" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          Riconosci emozione dall'immagine
+        </button>
+
+        <!-- Status / Spinner -->
+        <div class="img-status" id="img-status" style="display:none">
+          <div class="img-spinner"></div>
+          <span id="img-status-text">Analisi in corso…</span>
+        </div>
+
+        <!-- Error Message -->
+        <div class="img-error" id="img-error" style="display:none"></div>
+
+        <!-- Results Panel (hidden until analysis runs) -->
+        <div class="analyze-results" id="img-analyze-results" style="display:none">
+
+          <!-- Detected Emotion Banner -->
+          <div class="analyze-detected-banner" id="img-detected-banner">
+            <div class="analyze-detected-info">
+              <div class="analyze-detected-label">Emozione rilevata</div>
+              <div class="analyze-detected-name" id="img-detected-name">—</div>
+              <div class="analyze-detected-sub" id="img-detected-sub">—</div>
+            </div>
+            <div class="analyze-confidence-ring" id="img-confidence-ring">
+              <svg viewBox="0 0 44 44" class="ring-svg">
+                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                <circle id="img-ring-progress" cx="22" cy="22" r="18" fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1"
+                  transform="rotate(-90 22 22)"/>
+              </svg>
+              <span id="img-ring-pct">0%</span>
+            </div>
+          </div>
+
+          <!-- AI Description -->
+          <div class="analyze-section-label">Descrizione visiva dell'IA</div>
+          <div class="img-ai-desc" id="img-ai-desc"></div>
+
+          <!-- Plutchik Score Bars -->
+          <div class="analyze-section-label" style="margin-top:14px">Vettore Plutchik rilevato</div>
+          <div class="analyze-bars" id="img-analyze-bars">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Matching Dataset Emotion -->
+          <div class="analyze-section-label" style="margin-top:14px">Corrispondenza nel dataset</div>
+          <div class="analyze-match-card" id="img-analyze-match-card">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Apply Button -->
+          <button id="btn-apply-img-analyzed" class="btn-apply-analyzed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Applica questa emozione all'entità sintetica
+          </button>
+
         </div>
       </div>
     </div>
