@@ -492,7 +492,7 @@ function initThree() {
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('touchmove', onTouchMove, { passive: true });
-  canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+  window.addEventListener('touchstart', onTouchStart, { passive: true });
   canvas.addEventListener('click', triggerShockwave);
 
   animate();
@@ -582,22 +582,33 @@ function initCosmicDust() {
   scene.add(dust);
 }
 
+let baseCameraY = 0.0;
+
 function updateCameraFraming() {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const isMobile = width <= 768;
   const aspect = width / height;
+  const isCompactMobile = width <= 400 || aspect < 0.52; // iPhone 13 mini: 375x812 (aspect ~0.46)
   camera.aspect = aspect;
 
   if (isMobile) {
-    camera.fov = aspect < 0.6 ? 50 : 45;
-    camera.position.z = aspect < 0.6 ? 6.8 : 6.4;
-    camera.position.y = 0.25;
+    if (isCompactMobile) {
+      // Specifically calibrated for iPhone 13 mini and compact narrow portrait viewports
+      camera.fov = 52;
+      camera.position.z = 7.1;
+      baseCameraY = 0.32;
+    } else {
+      camera.fov = aspect < 0.6 ? 48 : 45;
+      camera.position.z = aspect < 0.6 ? 6.7 : 6.4;
+      baseCameraY = 0.24;
+    }
   } else {
     camera.fov = 42;
     camera.position.z = 6.4;
-    camera.position.y = 0.0;
+    baseCameraY = 0.0;
   }
+  camera.position.y = baseCameraY;
   camera.updateProjectionMatrix();
   if (renderer) renderer.setSize(width, height);
 }
@@ -643,8 +654,8 @@ function animate() {
   mouse.y += (mouse.targetY - mouse.y) * 0.05;
 
   camera.position.x = mouse.x * 0.35;
-  camera.position.y = mouse.y * 0.35;
-  camera.lookAt(0, 0, 0);
+  camera.position.y = baseCameraY + mouse.y * 0.22;
+  camera.lookAt(0, baseCameraY * 0.45, 0);
 
   // Shockwave decay
   if (shockwaveImpulse > 0.001) {
@@ -1468,6 +1479,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initCatalogModal();
   initAnalyzeModal();
   initImageAnalyzeModal();
+  initWebSurferModal();
   loadDataset();
 });
 
@@ -2112,8 +2124,8 @@ function renderAnalysisResult(analysis, matchedEmotion) {
 // 12. IMAGE EMOTION ANALYSIS (Gemini Vision API)
 // ============================================================================
 
-/** Gemini API key preconfigurata */
-let geminiApiKey = 'AQ.Ab8RN6JlUM9X5yP8kZsfY2WH7kG4-PO2Jhpx3oRkU05fmLV60g';
+/** Gemini API key preconfigurata di default */
+let geminiApiKey = 'AQ.Ab8RN6JhgZNfvzDjV0zv8PCkL14hWpYUwVgmA3ZpxIrD-PSdyg';
 
 /** Last image-analysis result — used when "Apply" button is pressed */
 let lastImageAnalysisResult = null;
@@ -2131,13 +2143,14 @@ function fileToBase64(file) {
 }
 
 /**
- * Call Gemini 2.0 Flash (multimodal) to analyse an image for emotional content.
+ * Call Gemini Vision with automatic retry and model fallback (gemini-3.8-flash -> gemini-2.5-flash -> gemini-1.5-flash -> gemini-2.5-pro -> gemini-1.5-pro).
  * @param {string} apiKey  Gemini API key
  * @param {string} base64Image  Base64-encoded image data (no data-URI prefix)
  * @param {string} mimeType  MIME type of the image (e.g. "image/jpeg")
+ * @param {Function} [onStatus]  Optional callback for status updates
  * @returns {Promise<Object>} Parsed JSON result from the model
  */
-async function callGeminiVision(apiKey, base64Image, mimeType) {
+async function callGeminiVision(apiKey, base64Image, mimeType, onStatus) {
   const PROMPT = `
 Sei un esperto di psicologia delle emozioni specializzato nella ruota di Plutchik.
 
@@ -2163,38 +2176,95 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido (senza markdown, senza testo 
 }
 I valori di plutchik_weights devono sommare a circa 1.0.`.trim();
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const body = {
-    contents: [{
-      parts: [
-        { text: PROMPT },
-        { inline_data: { mime_type: mimeType, data: base64Image } }
-      ]
-    }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 512 }
-  };
+  // Verified active models that support vision & generateContent on v1beta
+  const CANDIDATE_MODELS = [
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  let lastError = null;
 
-  if (!response.ok) {
-    const errBody = await response.json().catch(() => ({}));
-    throw new Error(`Gemini API error: ${errBody?.error?.message || 'HTTP ' + response.status}`);
+  for (let mIdx = 0; mIdx < CANDIDATE_MODELS.length; mIdx++) {
+    const model = CANDIDATE_MODELS[mIdx];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: mimeType, data: base64Image } }
+        ]
+      }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 512 }
+    };
+
+    const maxAttempts = 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (onStatus) {
+          if (mIdx === 0 && attempt === 1) {
+            onStatus(`Consultando Gemini Vision (${model})…`);
+          } else if (attempt > 1) {
+            onStatus(`Picco di richieste su ${model}: nuovo tentativo (${attempt}/${maxAttempts})…`);
+            await sleep(1500 * attempt);
+          } else {
+            onStatus(`Tentativo con modello alternativo (${model})…`);
+            await sleep(600);
+          }
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => ({}));
+          const errMsg = errBody?.error?.message || `HTTP ${response.status}`;
+          const errStatus = response.status;
+
+          // Fatal authentication errors - no need to test other models
+          if (errStatus === 400 && (errMsg.includes('API key') || errMsg.includes('INVALID_ARGUMENT'))) {
+            throw new Error(`Chiave API non valida: ${errMsg}`);
+          }
+          if (errStatus === 403) {
+            throw new Error(`Accesso negato: ${errMsg}`);
+          }
+
+          const isOverloaded = errStatus === 503 || errStatus === 429 ||
+            /high demand|overloaded|spikes in demand|temporarily|exhausted|quota/i.test(errMsg);
+
+          const err = new Error(errMsg);
+          err.isOverloaded = isOverloaded;
+          err.status = errStatus;
+          throw err;
+        }
+
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim();
+
+        try {
+          return JSON.parse(cleaned);
+        } catch {
+          throw new Error(`Risposta non parsabile:\n${rawText.slice(0, 300)}`);
+        }
+      } catch (err) {
+        lastError = err;
+        // Bubble up permanent authentication issues
+        if (err.message.startsWith('Chiave API non valida') || err.message.startsWith('Accesso negato')) {
+          throw err;
+        }
+      }
+    }
   }
 
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  // Strip optional markdown code fences
-  const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error(`Risposta non parsabile:\n${rawText.slice(0, 300)}`);
-  }
+  throw new Error(`Tutti i modelli Gemini sono momentaneamente ad alta richiesta o non disponibili.\nMessaggio: ${lastError?.message || 'Server occupato'}.\nRiprova tra qualche istante.`);
 }
 
 /**
@@ -2376,7 +2446,13 @@ function initImageAnalyzeModal() {
   if (btnSaveKey && apiKeyInput) {
     btnSaveKey.addEventListener('click', () => {
       const key = apiKeyInput.value.trim();
-      if (!key) return;
+      if (!key) {
+        geminiApiKey = '';
+        btnSaveKey.textContent = 'Salva';
+        btnSaveKey.classList.remove('saved');
+        updateAnalyzeBtn();
+        return;
+      }
       geminiApiKey = key;
       btnSaveKey.textContent = '\u2713 Salvata';
       btnSaveKey.classList.add('saved');
@@ -2451,7 +2527,12 @@ function initImageAnalyzeModal() {
       try {
         const b64 = await fileToBase64(currentFile);
         if (statusText) statusText.textContent = 'Consultando Gemini Vision\u2026';
-        const result = await callGeminiVision(geminiApiKey, b64, currentFile.type || 'image/jpeg');
+        const result = await callGeminiVision(
+          geminiApiKey,
+          b64,
+          currentFile.type || 'image/jpeg',
+          msg => { if (statusText) statusText.textContent = msg; }
+        );
         if (statusEl) statusEl.style.display = 'none';
         renderImageAnalysisResults(result);
       } catch (err) {
@@ -2474,3 +2555,879 @@ function initImageAnalyzeModal() {
     });
   }
 }
+
+
+// ============================================================================
+// 13. NAVIGATORE WEB RANDOMICO (RANDOM WEB SURFER & EMOTIONAL SCRAPER)
+// ============================================================================
+
+/** Fallback offline di testi letterari, filosofici e scientifici ad alto tasso emotivo */
+const SURFER_FALLBACK_TEXTS = [
+  {
+    title: "L'Infinito",
+    subtitle: "Giacomo Leopardi • Canti",
+    source: "Letteratura Italiana",
+    icon: "📜",
+    url: "https://it.wikipedia.org/wiki/L%27infinito",
+    text: "Sempre caro mi fu quest'ermo colle, e questa siepe, che da tanta parte dell'ultimo orizzonte il guardo esclude. Ma sedendo e mirando, interminati spazi di là da quella, e sovrumani silenzi, e profondissima quiete io nel pensier mi fingo; ove per poco il cor non si spaura."
+  },
+  {
+    title: "La Notte Stellata e il Silenzio Cosmico",
+    subtitle: "Blaise Pascal • Pensieri",
+    source: "Filosofia Cosmica",
+    icon: "🌌",
+    url: "https://it.wikipedia.org/wiki/Blaise_Pascal",
+    text: "Il silenzio eterno di questi spazi infiniti mi atterrisce. Quando considero la breve durata della mia vita, assorbita nell'eternità che la precede e la segue, il piccolo spazio che riempio e che vedo, provo un senso di vertigine e di profondo stupore."
+  },
+  {
+    title: "Lettere a un Giovane Poeta",
+    subtitle: "Rainer Maria Rilke • Solitudine e Meraviglia",
+    source: "Poesia Universale",
+    icon: "✒️",
+    url: "https://it.wikipedia.org/wiki/Rainer_Maria_Rilke",
+    text: "Ama la tua solitudine e sopporta con dolce lamento il dolore che ti arreca. Sii paziente verso tutto ciò che nel tuo cuore è irrisolto e cerca di amare le domande stesse, come fossero stanze chiuse a chiave o libri scritti in una lingua del tutto straniera."
+  },
+  {
+    title: "La Saggezza della Tempesta e della Resilienza",
+    subtitle: "Marco Aurelio • Colloqui con se stesso",
+    source: "Stoicismo Antico",
+    icon: "🏛️",
+    url: "https://it.wikipedia.org/wiki/Marco_Aurelio",
+    text: "Sii come il promontorio contro cui si infrangono incessantemente le onde: esso resta immobile, e intorno ad esso si placa il furore delle acque. Non dire mai: 'Che sfortuna mi è capitata', ma di': 'Che fortuna che ho, perché pur essendomi capitato questo, resto sereno'."
+  },
+  {
+    title: "Il Mistero della Coscienza Cosmica",
+    subtitle: "Carl Sagan • Cosmos",
+    source: "Astronomia & Meraviglia",
+    icon: "🔭",
+    url: "https://it.wikipedia.org/wiki/Carl_Sagan",
+    text: "L'azoto nel nostro DNA, il calcio nei nostri denti, il ferro nel nostro sangue sono stati generati all'interno di stelle morenti collassate miliardi di anni fa. Siamo fatti della materia delle stelle: l'universo che contempla se stesso con stupore e ammirazione."
+  },
+  {
+    title: "Furia e Tempesta dell'Anima",
+    subtitle: "William Shakespeare • Re Lear",
+    source: "Dramma Universale",
+    icon: "⚡",
+    url: "https://it.wikipedia.org/wiki/Re_Lear",
+    text: "Soffiate, o venti, e spaccatevi le guance! Infuriate! Cataratte e uragani dell'abisso, scrosciate finché non abbiate annegato i nostri campanili e affogato i galli segnavento! E voi, solforosi e veloci pensieri balenanti, scuotete la terra con rabbia inaudita!"
+  },
+  {
+    title: "Il Libro dell'Inquietudine",
+    subtitle: "Fernando Pessoa • Saudade e Malinconia",
+    source: "Letteratura Portoghese",
+    icon: "🌧️",
+    url: "https://it.wikipedia.org/wiki/Il_libro_dell%27inquietudine",
+    text: "Provo una strana compassione per me stesso, per il mio passato che non tornerà e per la tristezza che mi assale nel guardare la pioggia cadere sui tetti umidi della città. Porto in me tutte le ferite delle battaglie che ho evitato."
+  },
+  {
+    title: "Elogio della Gioia e della Gratitudine",
+    subtitle: "Spinoza • Ethica",
+    source: "Filosofia Moderna",
+    icon: "☀️",
+    url: "https://it.wikipedia.org/wiki/Baruch_Spinoza",
+    text: "La letizia è il passaggio dell'uomo da una minore a una maggiore perfezione. Quanto più siamo avvolti da una gioia luminosa, tanto più partecipiamo della natura divina e aumentiamo la nostra forza di esistere e connetterci agli altri con amore sincero."
+  }
+];
+
+/** Fallback offline di immagini con forte impronta emotiva */
+const SURFER_FALLBACK_IMAGES = [
+  {
+    title: "Nebulosa Testa di Cavallo (Hubble)",
+    subtitle: "Spazio Profondo • Meraviglia Cosmica",
+    source: "Wikimedia Commons / NASA",
+    icon: "🌌",
+    url: "https://commons.wikimedia.org/wiki/File:Hubble_Horsehead_Nebula.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Hubble_Horsehead_Nebula.jpg/800px-Hubble_Horsehead_Nebula.jpg",
+    fallbackEmotion: "Meraviglia"
+  },
+  {
+    title: "Il Viandante sul mare di nebbia (C.D. Friedrich)",
+    subtitle: "Romanticismo • Nostalgia e Sublime",
+    source: "Kunsthalle Hamburg",
+    icon: "🏔️",
+    url: "https://commons.wikimedia.org/wiki/File:Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/800px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
+    fallbackEmotion: "Saudade"
+  },
+  {
+    title: "L'Urlo (Edvard Munch)",
+    subtitle: "Espressionismo • Angoscia e Terrore",
+    source: "Galleria Nazionale di Oslo",
+    icon: "😱",
+    url: "https://commons.wikimedia.org/wiki/File:Edvard_Munch,_1893,_The_Scream,_oil,_tempera_and_pastel_on_cardboard,_91_x_73_cm,_National_Gallery_of_Norway.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg/800px-Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg",
+    fallbackEmotion: "Angoscia"
+  },
+  {
+    title: "Danza di Ninfe alla Luce dell'Alba",
+    subtitle: "Impressionismo • Gioia e Serenità",
+    source: "Wikimedia Commons Art",
+    icon: "🌿",
+    url: "https://commons.wikimedia.org/wiki/File:Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e,_la_danse_des_nymphes.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e%2C_la_danse_des_nymphes.jpg/800px-Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e%2C_la_danse_des_nymphes.jpg",
+    fallbackEmotion: "Gioia"
+  }
+];
+
+let surferMode = 'mixed'; // 'mixed' | 'text' | 'image'
+let surferAutoPilot = false;
+let surferAutoPilotTimer = null;
+let surferCountdownSec = 15;
+let surferCountdownRemaining = 15;
+let surferProgressInterval = null;
+let isSurferBusy = false;
+let lastSurferEmotionResult = null;
+let surferHistory = [];
+
+/**
+ * Fetch a random text excerpt from open web APIs (Wikipedia REST API / Quotable)
+ * with graceful fallback to curated philosophical/literary texts.
+ */
+async function fetchRandomTextFromWeb(onStatus) {
+  if (onStatus) onStatus('Connessione a Wikipedia REST API...');
+
+  // 75% Italian Wikipedia, 25% English Wikipedia for multicultural variety
+  const lang = Math.random() < 0.75 ? 'it' : 'en';
+  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/random/summary`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' }
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const extract = (data.extract || '').trim();
+
+      if (extract && extract.length >= 40) {
+        return {
+          type: 'text',
+          title: data.title || 'Articolo Enciclopedico',
+          subtitle: data.description || (lang === 'it' ? 'Wikipedia Italia • Nodi della Conoscenza' : 'English Wikipedia • Open Knowledge'),
+          source: lang === 'it' ? 'Wikipedia IT' : 'Wikipedia EN',
+          icon: '🌐',
+          url: data.content_urls?.desktop?.page || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(data.title)}`,
+          text: extract
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Wikipedia random fetch skipped or offline, attempting quote API...', err.message);
+  }
+
+  // Secondary source: Quotes API
+  try {
+    if (onStatus) onStatus('Interrogazione archivio citazioni aperte...');
+    const quoteRes = await fetch('https://dummyjson.com/quotes/random', { signal: AbortSignal.timeout(4000) });
+    if (quoteRes.ok) {
+      const q = await quoteRes.json();
+      if (q && q.quote) {
+        return {
+          type: 'text',
+          title: `Pensiero di ${q.author || 'Anonimo'}`,
+          subtitle: 'Archivio Aperto di Citazioni Filosofiche',
+          source: 'Citazione Web',
+          icon: '💡',
+          url: 'https://dummyjson.com/quotes',
+          text: `« ${q.quote} »`
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Secondary quote fetch offline:', e.message);
+  }
+
+  // Fallback to rich curated literature
+  if (onStatus) onStatus('Accesso all\'archivio letterario universale...');
+  const randomChoice = SURFER_FALLBACK_TEXTS[Math.floor(Math.random() * SURFER_FALLBACK_TEXTS.length)];
+  return { ...randomChoice, type: 'text' };
+}
+
+/**
+ * Fetch a random image from open web APIs (Wikimedia Commons or Wikipedia with thumbnail).
+ */
+async function fetchRandomImageFromWeb(onStatus) {
+  if (onStatus) onStatus('Ricerca immagine aperta su Wikimedia Commons...');
+
+  // Method 1: Wikimedia Commons Random Picture API
+  try {
+    const wmUrl = 'https://commons.wikimedia.org/w/api.php?action=query&generator=random&grnnamespace=6&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(wmUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const pages = data.query?.pages || {};
+      for (const pId of Object.keys(pages)) {
+        const page = pages[pId];
+        const info = page.imageinfo?.[0];
+        if (info && info.mime && info.mime.startsWith('image/') && !info.mime.includes('svg') && !info.mime.includes('tiff')) {
+          const directUrl = info.thumburl || info.url;
+          if (directUrl) {
+            let cleanTitle = (page.title || '').replace(/^File:/i, '').replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+            return {
+              type: 'image',
+              title: cleanTitle || 'Fotografia dell\'Umanità',
+              subtitle: 'Wikimedia Commons • Patrimonio Visivo Aperto',
+              source: 'Wikimedia Commons',
+              icon: '📷',
+              url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
+              imageUrl: directUrl
+            };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Wikimedia random query timed out, trying Wikipedia summary thumb...', err.message);
+  }
+
+  // Method 2: Wikipedia Summary with thumbnail
+  try {
+    if (onStatus) onStatus('Scansione articoli illustrati su Wikipedia...');
+    const lang = Math.random() < 0.5 ? 'it' : 'en';
+    const wikiUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/random/summary`;
+    const res = await fetch(wikiUrl, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.thumbnail && data.thumbnail.source) {
+        return {
+          type: 'image',
+          title: data.title,
+          subtitle: data.description || (lang === 'it' ? 'Wikipedia Italia con Iconografia' : 'Wikipedia Visual Concept'),
+          source: lang === 'it' ? 'Wikipedia IT' : 'Wikipedia EN',
+          icon: '🖼️',
+          url: data.content_urls?.desktop?.page || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(data.title)}`,
+          imageUrl: data.thumbnail.source
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Wikipedia thumbnail fetch failed:', e.message);
+  }
+
+  // Method 3: Lorem Picsum random photography
+  try {
+    const picsumUrl = `https://picsum.photos/700/460?random=${Date.now()}`;
+    return {
+      type: 'image',
+      title: 'Scorcio Fotografico del Mondo',
+      subtitle: 'Lorem Picsum • Fotografia Creativa ad Alta Risoluzione',
+      source: 'Picsum Web',
+      icon: '📸',
+      url: 'https://picsum.photos',
+      imageUrl: picsumUrl
+    };
+  } catch (e) {
+    console.warn('Picsum failed:', e);
+  }
+
+  // Fallback to curated artwork
+  const chosen = SURFER_FALLBACK_IMAGES[Math.floor(Math.random() * SURFER_FALLBACK_IMAGES.length)];
+  return { ...chosen, type: 'image' };
+}
+
+/**
+ * Convert an image URL to base64 with multiple CORS safety fallbacks.
+ */
+function webImageToBase64(imageUrl) {
+  return new Promise((resolve, reject) => {
+    // Attempt 1: Fetch as Blob with CORS
+    fetch(imageUrl, { mode: 'cors' })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const resultStr = reader.result;
+          resolve({
+            base64: resultStr.split(',')[1],
+            mimeType: blob.type || 'image/jpeg'
+          });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {
+        // Attempt 2: Image element with canvas conversion
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 640;
+            let w = img.naturalWidth || 600;
+            let h = img.naturalHeight || 400;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            resolve({
+              base64: dataUrl.split(',')[1],
+              mimeType: 'image/jpeg'
+            });
+          } catch (canvasErr) {
+            reject(canvasErr);
+          }
+        };
+        img.onerror = () => reject(new Error("CORS o download dell'immagine bloccato dal server sorgente"));
+        img.src = imageUrl;
+      });
+  });
+}
+
+/**
+ * Execute the full emotional analysis on the fetched web item using existing tools:
+ * - analyzeTextEmotion & findBestDatasetMatch for text
+ * - callGeminiVision for image (with automatic fallback to text semantic analysis if Gemini quota/key is not set)
+ */
+async function analyzeWebSurferItem(item, onStatus) {
+  if (item.type === 'text') {
+    if (onStatus) onStatus('Analisi lessicale e vettoriale Plutchik del testo…');
+    // Allow UI to update
+    await new Promise(r => setTimeout(r, 80));
+
+    const analysis = analyzeTextEmotion(item.text);
+    if (!analysis) {
+      // If signal was weak, analyze title + text combined
+      const combined = `${item.title}. ${item.text}`;
+      const secondTry = analyzeTextEmotion(combined);
+      if (secondTry) {
+        const match = findBestDatasetMatch(secondTry);
+        return {
+          type: 'text',
+          analysis: secondTry,
+          matchedEmotion: match,
+          dominant: secondTry.dominant,
+          confidence: secondTry.confidence,
+          weights: secondTry.vector,
+          aiNote: `Analisi semantica su «${item.title}». Rilevato vettore dominante in ${PLUTCHIK_PRIMARIES[secondTry.dominant]?.it}.`
+        };
+      }
+      // If still no signal, default to contemplative wonder (Sorpresa/Fiducia)
+      return {
+        type: 'text',
+        analysis: null,
+        matchedEmotion: emotionsDataset.find(e => e.plutchik?.primary === 'sorpresa') || emotionsDataset[0],
+        dominant: 'sorpresa',
+        confidence: 0.65,
+        weights: { sorpresa: 0.5, fiducia: 0.3, gioia: 0.2 },
+        aiNote: `Segnale emotivo neutro; l'IA reagisce con contemplazione e curiosità per l'ignoto.`
+      };
+    }
+
+    const matchedEmotion = findBestDatasetMatch(analysis);
+    return {
+      type: 'text',
+      analysis,
+      matchedEmotion,
+      dominant: analysis.dominant,
+      confidence: analysis.confidence,
+      weights: analysis.vector,
+      aiNote: `Scansione semantica del testo completata. Massima risonanza con ${matchedEmotion ? matchedEmotion.termine_originale : analysis.dominant}.`
+    };
+  }
+
+  if (item.type === 'image') {
+    if (onStatus) onStatus('Codifica immagine web in corso…');
+    
+    let base64Data = null;
+    let mimeType = 'image/jpeg';
+
+    try {
+      const encoded = await webImageToBase64(item.imageUrl);
+      base64Data = encoded.base64;
+      mimeType = encoded.mimeType;
+    } catch (imgErr) {
+      console.warn("Impossibile convertire immagine in base64:", imgErr);
+    }
+
+    // If Gemini API Key is available and base64 succeeded, call Gemini Vision tool
+    if (geminiApiKey && base64Data) {
+      try {
+        if (onStatus) onStatus('Consultando Google Gemini Vision API…');
+        const geminiRes = await callGeminiVision(geminiApiKey, base64Data, mimeType, onStatus);
+
+        const weights = geminiRes.plutchik_weights || {};
+        let dominant = 'gioia', maxW = -1;
+        for (const [k, w] of Object.entries(weights)) {
+          if (w > maxW) { maxW = w; dominant = k; }
+        }
+
+        let datasetMatch =
+          emotionsDataset.find(e =>
+            e.plutchik?.primary === dominant &&
+            (e.termine_originale.toLowerCase() === (geminiRes.emotion || '').toLowerCase() ||
+             e.famiglia_emotiva.toLowerCase() === (geminiRes.emotion || '').toLowerCase())
+          ) ||
+          emotionsDataset.find(e => e.plutchik?.primary === dominant);
+
+        return {
+          type: 'image',
+          analysis: geminiRes,
+          matchedEmotion: datasetMatch,
+          dominant,
+          confidence: geminiRes.confidence || 0.85,
+          weights,
+          valenza: geminiRes.valenza,
+          arousal: geminiRes.arousal,
+          aiNote: geminiRes.description || `L'IA visiva percepisce ${geminiRes.emotion || dominant}.`
+        };
+      } catch (geminiErr) {
+        console.warn("Gemini Vision non disponibile, passo al motore semantico di riserva:", geminiErr);
+      }
+    }
+
+    // Resilient fallback: semantic text analysis on the image's title and contextual tags
+    if (onStatus) onStatus('Analisi iconografica e semantica del titolo visivo…');
+    const semanticText = `${item.title} ${item.subtitle || ''} ${item.fallbackEmotion || ''}`;
+    const textAnalysis = analyzeTextEmotion(semanticText) || {
+      dominant: 'sorpresa',
+      confidence: 0.72,
+      vector: { sorpresa: 0.55, gioia: 0.30, fiducia: 0.15 }
+    };
+
+    const datasetMatch = findBestDatasetMatch(textAnalysis) ||
+      emotionsDataset.find(e => e.plutchik?.primary === textAnalysis.dominant) ||
+      emotionsDataset[0];
+
+    return {
+      type: 'image',
+      analysis: null,
+      matchedEmotion: datasetMatch,
+      dominant: textAnalysis.dominant,
+      confidence: textAnalysis.confidence || 0.75,
+      weights: textAnalysis.vector,
+      aiNote: `Interpretazione visivo-contestuale dell'immagine: «${item.title}». Riconosciuto stato di ${datasetMatch.termine_originale}.`
+    };
+  }
+}
+
+/**
+ * Render the discovered item and its analysis in the Surfer modal,
+ * and apply the resulting emotion to the 3D entity if enabled.
+ */
+function renderSurferDiscovery(item, analysisData) {
+  const emptyState    = document.getElementById('surfer-empty-state');
+  const contentView   = document.getElementById('surfer-content-view');
+  const sourceIcon    = document.getElementById('surfer-source-icon');
+  const sourceName    = document.getElementById('surfer-source-name');
+  const externalLink  = document.getElementById('surfer-external-link');
+  const itemTitle     = document.getElementById('surfer-item-title');
+  const itemSubtitle  = document.getElementById('surfer-item-subtitle');
+  const textBox       = document.getElementById('surfer-text-box');
+  const textContent   = document.getElementById('surfer-text-content');
+  const imageBox      = document.getElementById('surfer-image-box');
+  const imageEl       = document.getElementById('surfer-image-el');
+  const banner        = document.getElementById('surfer-detected-banner');
+  const detectedName  = document.getElementById('surfer-detected-name');
+  const detectedSub   = document.getElementById('surfer-detected-sub');
+  const ringProgress  = document.getElementById('surfer-ring-progress');
+  const ringPct       = document.getElementById('surfer-ring-pct');
+  const aiDesc        = document.getElementById('surfer-ai-desc');
+  const barsContainer = document.getElementById('surfer-bars');
+  const matchCard     = document.getElementById('surfer-match-card');
+
+  if (emptyState) emptyState.style.display = 'none';
+  if (contentView) contentView.style.display = 'block';
+
+  // Source & Link
+  if (sourceIcon) sourceIcon.textContent = item.icon || '🌐';
+  if (sourceName) sourceName.textContent = item.source || 'Web';
+  if (externalLink) {
+    externalLink.href = item.url || '#';
+    externalLink.style.display = item.url ? 'inline-flex' : 'none';
+  }
+
+  // Title & Subtitle
+  if (itemTitle) itemTitle.textContent = item.title;
+  if (itemSubtitle) itemSubtitle.textContent = item.subtitle || '';
+
+  // Content display
+  if (item.type === 'text') {
+    if (textBox) textBox.style.display = 'block';
+    if (textContent) textContent.textContent = item.text;
+    if (imageBox) imageBox.style.display = 'none';
+  } else {
+    if (textBox) textBox.style.display = 'none';
+    if (imageBox) imageBox.style.display = 'flex';
+    if (imageEl) {
+      imageEl.src = item.imageUrl;
+      imageEl.alt = item.title;
+    }
+  }
+
+  // Emotion calculations
+  const dominantKey = analysisData.dominant || 'gioia';
+  const pk = PLUTCHIK_PRIMARIES[dominantKey] || PLUTCHIK_PRIMARIES.gioia;
+  const confidence = Math.max(0.1, Math.min(1.0, analysisData.confidence || 0.75));
+  const pct = Math.round(confidence * 100);
+
+  // Confidence ring
+  if (ringProgress) {
+    const offset = (113.1 * (1 - confidence)).toFixed(1);
+    ringProgress.setAttribute('stroke-dashoffset', offset);
+    ringProgress.style.stroke = pk.color;
+  }
+  if (ringPct) {
+    ringPct.textContent = `${pct}%`;
+    ringPct.style.color = pk.color;
+  }
+
+  // Banner
+  if (banner) {
+    banner.style.borderColor = `${pk.color}55`;
+    banner.style.background = `${pk.color}15`;
+  }
+  if (detectedName) {
+    detectedName.textContent = analysisData.matchedEmotion ? analysisData.matchedEmotion.termine_originale : pk.it;
+    detectedName.style.color = pk.color;
+  }
+  if (detectedSub) {
+    detectedSub.textContent = `Famiglia: ${pk.it.toUpperCase()} • Risonanza Plutchik: ${pct}% • ${item.type === 'text' ? 'Scansione Testuale' : 'Visione Artificiale'}`;
+  }
+
+  // AI Description / Note
+  if (aiDesc) {
+    if (analysisData.aiNote) {
+      aiDesc.textContent = `« ${analysisData.aiNote} »`;
+      aiDesc.style.display = 'block';
+      aiDesc.style.borderLeftColor = pk.color;
+    } else {
+      aiDesc.style.display = 'none';
+    }
+  }
+
+  // Plutchik Bars
+  if (barsContainer) {
+    barsContainer.innerHTML = '';
+    const weights = analysisData.weights || {};
+    const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
+    sorted.forEach(([key, val]) => {
+      if (val < 0.02) return;
+      const info = PLUTCHIK_PRIMARIES[key];
+      if (!info) return;
+      const barPct = Math.round(val * 100);
+      const row = document.createElement('div');
+      row.className = 'vector-row';
+      row.innerHTML = `
+        <span class="vector-name" style="color: ${info.color}">${info.it}</span>
+        <div class="vector-bar-wrap">
+          <div class="vector-bar-fill" style="width: ${barPct}%; background: ${info.color}"></div>
+        </div>
+        <span class="vector-pct">${barPct}%</span>
+      `;
+      barsContainer.appendChild(row);
+    });
+  }
+
+  // Dataset Match Card
+  const matched = analysisData.matchedEmotion;
+  if (matchCard) {
+    if (matched) {
+      const mpk = matched.plutchik || pk;
+      matchCard.innerHTML = `
+        <div class="analyze-match-header">
+          <div class="item-dot" style="background: ${mpk.color || pk.color}; width:10px; height:10px; border-radius:50%; flex-shrink:0"></div>
+          <strong style="color: ${mpk.color || pk.color}">${matched.termine_originale}</strong>
+          <span style="color: #94a3b8; font-size: 0.72rem">${(matched.lingua_cultura || '').split('/')[0]}</span>
+        </div>
+        <p style="color: #94a3b8; font-size: 0.78rem; line-height: 1.5; margin-top: 6px">
+          ${(matched.significato_italiano || '').substring(0, 180)}${(matched.significato_italiano || '').length > 180 ? '…' : ''}
+        </p>
+        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap">
+          <span class="tag tag-valenza-${matched.valenza}" style="font-size:0.68rem">Valenza: ${matched.valenza}</span>
+          <span class="tag" style="font-size:0.68rem">Arousal: ${matched.arousal}</span>
+        </div>
+      `;
+    } else {
+      matchCard.innerHTML = '<p style="color: #64748b; font-size: 0.8rem;">Voce sintetica basata sul vettore Plutchik decodificato.</p>';
+    }
+  }
+
+  // Build the synthesized emotion object for 3D metamorfosi
+  const emotionObjToApply = matched ? { ...matched } : {
+    termine_originale: pk.it,
+    lingua_cultura: 'Navigatore Web Randomico',
+    famiglia_emotiva: pk.it,
+    significato_italiano: analysisData.aiNote || `Sensazione evocata dalla risorsa web «${item.title}».`,
+    valenza: 'neutra',
+    arousal: 'medio',
+    modello_fonte: 'Navigazione Web Serendipica',
+    plutchik: null
+  };
+
+  // Ensure weights match the discovered vector
+  emotionObjToApply.plutchik = {
+    primary: dominantKey,
+    primary_it: pk.it,
+    secondary: null,
+    secondary_it: null,
+    weights: analysisData.weights || { [dominantKey]: 1.0 },
+    color: pk.color,
+    glow: pk.glow,
+    core: pk.core,
+    angle: pk.angle,
+    physics: { ...pk.physics }
+  };
+
+  lastSurferEmotionResult = emotionObjToApply;
+
+  // Auto-apply to 3D entity if checkbox is checked
+  const autoApplyCheckbox = document.getElementById('surfer-auto-apply');
+  if (autoApplyCheckbox && autoApplyCheckbox.checked) {
+    applyEmotion(emotionObjToApply, true);
+    const input = document.getElementById('emotion-input');
+    if (input) input.value = emotionObjToApply.termine_originale;
+  }
+
+  // Record in History
+  recordSurferHistory({
+    type: item.type,
+    title: item.title,
+    source: item.source,
+    emotionName: emotionObjToApply.termine_originale,
+    emotionColor: pk.color,
+    emotionObj: emotionObjToApply,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  });
+}
+
+/**
+ * Record a step in the surfer history timeline and update DOM.
+ */
+function recordSurferHistory(entry) {
+  surferHistory.unshift(entry);
+  if (surferHistory.length > 20) surferHistory.pop();
+
+  const countEl = document.getElementById('surfer-history-count');
+  if (countEl) countEl.textContent = `${surferHistory.length} ${surferHistory.length === 1 ? 'tappa' : 'tappe'}`;
+
+  const listEl = document.getElementById('surfer-history-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = '';
+  surferHistory.forEach((histItem, idx) => {
+    const row = document.createElement('div');
+    row.className = 'surfer-history-item';
+    row.title = `Fai clic per rievocare: ${histItem.emotionName}`;
+    row.innerHTML = `
+      <div class="surfer-history-item-left">
+        <span class="surfer-history-type-icon">${histItem.type === 'image' ? '📷' : '📜'}</span>
+        <span class="surfer-history-title">${histItem.title}</span>
+      </div>
+      <div class="surfer-history-item-right">
+        <span class="surfer-history-badge" style="background: ${histItem.emotionColor}22; color: ${histItem.emotionColor}; border: 1px solid ${histItem.emotionColor}55">
+          ${histItem.emotionName}
+        </span>
+        <span style="font-size:0.65rem; color:#64748b; font-family:var(--font-mono)">${histItem.time}</span>
+      </div>
+    `;
+
+    row.addEventListener('click', () => {
+      applyEmotion(histItem.emotionObj, true);
+      const input = document.getElementById('emotion-input');
+      if (input) input.value = histItem.emotionObj.termine_originale;
+    });
+
+    listEl.appendChild(row);
+  });
+}
+
+/**
+ * Perform one single exploration step on the web:
+ * 1. Randomly decide whether to fetch text or image based on current mode
+ * 2. Retrieve content
+ * 3. Analyze emotion with created tools
+ * 4. Update UI & morph 3D entity
+ */
+async function performWebSurferStep() {
+  if (isSurferBusy) return;
+  isSurferBusy = true;
+
+  const btnStep      = document.getElementById('btn-surfer-step');
+  const statusBox    = document.getElementById('surfer-status-box');
+  const statusStep   = document.getElementById('surfer-status-step');
+  const statusDetail = document.getElementById('surfer-status-detail');
+
+  if (btnStep) btnStep.disabled = true;
+  if (statusBox) statusBox.style.display = 'flex';
+
+  const updateStatus = (step, detail = '') => {
+    if (statusStep) statusStep.textContent = step;
+    if (statusDetail) statusDetail.textContent = detail;
+  };
+
+  try {
+    // 1. Determine type
+    let chosenType = 'text';
+    if (surferMode === 'mixed') {
+      chosenType = Math.random() < 0.5 ? 'text' : 'image';
+    } else if (surferMode === 'image') {
+      chosenType = 'image';
+    }
+
+    updateStatus('Esplorazione del Web in corso…', chosenType === 'text' ? 'Interrogazione nodi enciclopedici e testuali' : 'Ricerca iconografica e visiva aperta');
+
+    // 2. Fetch content
+    let item = null;
+    if (chosenType === 'text') {
+      item = await fetchRandomTextFromWeb(msg => updateStatus('Ricerca testo sul web…', msg));
+    } else {
+      item = await fetchRandomImageFromWeb(msg => updateStatus('Ricerca immagine sul web…', msg));
+    }
+
+    // 3. Analyze with created tools
+    updateStatus('Analisi emotiva in corso…', item.type === 'text' ? 'Decodifica lessicale e vettoriale Plutchik' : 'Elaborazione visione artificiale');
+    const analysisData = await analyzeWebSurferItem(item, msg => updateStatus('Analisi emotiva in corso…', msg));
+
+    // 4. Render & Morph
+    updateStatus('Metamorfosi dell\'entità sintetica…', `Emozione rilevata: ${analysisData.matchedEmotion ? analysisData.matchedEmotion.termine_originale : analysisData.dominant}`);
+    await new Promise(r => setTimeout(r, 200));
+
+    renderSurferDiscovery(item, analysisData);
+
+  } catch (err) {
+    console.error("Errore durante l'esplorazione web:", err);
+    updateStatus('Errore di connessione', err.message);
+    await new Promise(r => setTimeout(r, 1200));
+  } finally {
+    isSurferBusy = false;
+    if (btnStep) btnStep.disabled = false;
+    if (statusBox) statusBox.style.display = 'none';
+  }
+}
+
+/**
+ * Start or stop the auto-pilot continuous browsing loop.
+ */
+function toggleSurferAutoPilot() {
+  surferAutoPilot = !surferAutoPilot;
+  const btn = document.getElementById('btn-surfer-autopilot');
+  const btnText = document.getElementById('autopilot-btn-text');
+  const timerStatus = document.getElementById('surfer-timer-status');
+  const countdownEl = document.getElementById('surfer-timer-countdown');
+  const progressBar = document.getElementById('surfer-timer-progress');
+
+  if (surferAutoPilot) {
+    if (btn) btn.classList.add('active');
+    if (btnText) btnText.textContent = 'Pilota Automatico: ATTIVO';
+    if (timerStatus) timerStatus.style.display = 'flex';
+
+    // Immediate first exploration step if empty
+    const contentView = document.getElementById('surfer-content-view');
+    if (!contentView || contentView.style.display === 'none') {
+      performWebSurferStep();
+    }
+
+    // Reset countdown
+    surferCountdownRemaining = surferCountdownSec;
+    if (countdownEl) countdownEl.textContent = `Prossimo salto: ${surferCountdownRemaining}s`;
+    if (progressBar) progressBar.style.width = '0%';
+
+    // Run timer tick every 1 second
+    if (surferProgressInterval) clearInterval(surferProgressInterval);
+    surferProgressInterval = setInterval(() => {
+      if (!surferAutoPilot) return;
+
+      surferCountdownRemaining--;
+      if (countdownEl) countdownEl.textContent = `Prossimo salto: ${Math.max(0, surferCountdownRemaining)}s`;
+
+      const pct = Math.round(((surferCountdownSec - surferCountdownRemaining) / surferCountdownSec) * 100);
+      if (progressBar) progressBar.style.width = `${pct}%`;
+
+      if (surferCountdownRemaining <= 0) {
+        surferCountdownRemaining = surferCountdownSec;
+        if (progressBar) progressBar.style.width = '0%';
+        performWebSurferStep();
+      }
+    }, 1000);
+
+  } else {
+    if (btn) btn.classList.remove('active');
+    if (btnText) btnText.textContent = 'Pilota Automatico: OFF';
+    if (timerStatus) timerStatus.style.display = 'none';
+    if (surferProgressInterval) {
+      clearInterval(surferProgressInterval);
+      surferProgressInterval = null;
+    }
+  }
+}
+
+/**
+ * Initialize all event listeners and UI controls for the Random Web Surfer modal.
+ */
+function initWebSurferModal() {
+  const modal       = document.getElementById('modal-web-surfer');
+  const btnToggle   = document.getElementById('btn-web-surfer-toggle');
+  const btnClose    = document.getElementById('btn-close-web-surfer');
+  const btnStep     = document.getElementById('btn-surfer-step');
+  const btnAutopilot = document.getElementById('btn-surfer-autopilot');
+  const btnApply    = document.getElementById('btn-surfer-apply');
+  const modePills   = document.querySelectorAll('.surfer-pill');
+
+  if (!modal) return;
+
+  function openModal() {
+    modal.classList.add('open');
+    if (btnToggle) btnToggle.classList.add('active');
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    if (btnToggle) btnToggle.classList.remove('active');
+  }
+
+  if (btnToggle) btnToggle.addEventListener('click', openModal);
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  // Mode Selector Pills (Mixed, Text, Image)
+  modePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      modePills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      surferMode = pill.getAttribute('data-surfer-mode') || 'mixed';
+    });
+  });
+
+  // Action Buttons
+  if (btnStep) {
+    btnStep.addEventListener('click', () => {
+      performWebSurferStep();
+    });
+  }
+
+  if (btnAutopilot) {
+    btnAutopilot.addEventListener('click', () => {
+      toggleSurferAutoPilot();
+    });
+  }
+
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      if (lastSurferEmotionResult) {
+        applyEmotion(lastSurferEmotionResult, true);
+        const input = document.getElementById('emotion-input');
+        if (input) input.value = lastSurferEmotionResult.termine_originale;
+        closeModal();
+      }
+    });
+  }
+}
+

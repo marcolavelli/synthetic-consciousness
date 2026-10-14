@@ -1201,6 +1201,44 @@ body {
   .catalog-grid {
     grid-template-columns: 1fr;
   }
+
+  /* Header controls scroll mask */
+  .header-controls {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  }
+
+  /* Prevent iOS Safari disruptive auto-zoom on ALL inputs */
+  .emotion-input,
+  .catalog-search-input,
+  .analyze-textarea,
+  .img-api-input {
+    font-size: 16px !important;
+  }
+
+  /* Catalog filter buttons: single swipeable row on mobile */
+  .catalog-filters {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 6px;
+    mask-image: linear-gradient(to right, black calc(100% - 20px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 20px), transparent 100%);
+  }
+
+  .catalog-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+  }
 }
 
 /* Extra Small Mobile Screens (max-width: 480px) */
@@ -1212,15 +1250,174 @@ body {
     display: none; /* Hide subtitle to preserve clean header space */
   }
   .btn-header {
-    padding: 6px 8px;
+    padding: 6px 9px;
     font-size: 0.7rem;
   }
   .emotion-input::placeholder {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
   }
   .btn-send {
     padding: 7px 12px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
+  }
+  .quick-chips-wrapper {
+    gap: 5px;
+    padding: 2px 0 4px 0;
+  }
+  .quick-chip, .btn-random {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    min-height: 28px;
+  }
+}
+
+/* ==========================================================================
+   IPHONE 13 MINI & ULTRA-COMPACT VIEWPORTS (max-width: 390px)
+   Specifically calibrated for 375x812 CSS viewport with notch & home bar
+   ========================================================================== */
+@media (max-width: 390px) {
+  .ui-container {
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 
+             calc(10px + env(safe-area-inset-right, 0px)) 
+             calc(6px + env(safe-area-inset-bottom, 0px)) 
+             calc(10px + env(safe-area-inset-left, 0px));
+  }
+
+  .header-bar {
+    gap: 5px;
+  }
+
+  .title-group h1 {
+    font-size: 0.8rem;
+    gap: 5px;
+  }
+
+  .title-group .badge {
+    font-size: 0.58rem;
+    padding: 1px 6px;
+  }
+
+  .header-controls {
+    gap: 4px;
+    padding-bottom: 2px;
+  }
+
+  .btn-header {
+    padding: 5px 8px;
+    font-size: 0.67rem;
+    gap: 4px;
+    border-radius: 8px;
+  }
+
+  .btn-header svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Compact collapsed card on 375px */
+  .emotion-card.collapsed {
+    padding: 6px 12px;
+    max-height: 40px;
+    max-width: 92vw;
+  }
+
+  .emotion-card.collapsed .emotion-card-title {
+    font-size: 0.86rem;
+  }
+
+  .emotion-card.collapsed .emotion-culture {
+    font-size: 0.6rem;
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .btn-toggle-card {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Bottom capsule controls */
+  .bottom-section {
+    gap: 6px;
+  }
+
+  .input-box-wrapper {
+    padding: 4px 6px 4px 12px;
+    min-height: 42px;
+  }
+
+  .emotion-input::placeholder {
+    font-size: 0.76rem;
+  }
+
+  .btn-send {
+    padding: 6px 10px;
+    font-size: 0.74rem;
+    min-height: 32px;
+  }
+
+  .btn-icon {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 5px;
+  }
+
+  .quick-chip, .btn-random {
+    padding: 4px 8px;
+    font-size: 0.68rem;
+    min-height: 26px;
+  }
+
+  /* Modals on iPhone 13 mini: Compact bottom sheets */
+  .modal-card,
+  .modal-analyze-card,
+  .modal-image-card {
+    max-height: 88vh;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-radius: 20px 20px 0 0;
+  }
+
+  .modal-title-group h2 {
+    font-size: 0.98rem;
+  }
+
+  .modal-title-group p {
+    font-size: 0.67rem;
+  }
+
+  .plutchik-svg {
+    max-width: 240px;
+  }
+
+  .plutchik-legend {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+  }
+
+  .legend-item {
+    padding: 5px 8px;
+    font-size: 0.67rem;
+    min-height: 30px;
+  }
+
+  .analyze-textarea {
+    min-height: 75px;
+    padding: 10px 12px;
+  }
+
+  .img-dropzone {
+    padding: 14px 10px 12px;
+  }
+
+  .img-dropzone-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .img-dropzone-text {
+    font-size: 0.8rem;
   }
 }
 
@@ -1780,4 +1977,721 @@ body {
     height: 50px;
   }
 }
+
+/* ==========================================================================
+   NAVIGATORE WEB RANDOMICO — COMPONENTI UI & STILI
+   ========================================================================== */
+
+/* Header Button for Web Surfer */
+.btn-surfer-header {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.16) 0%, rgba(59, 130, 246, 0.12) 100%);
+  border-color: rgba(6, 182, 212, 0.35) !important;
+  color: #67e8f9 !important;
+}
+
+.btn-surfer-header:hover,
+.btn-surfer-header.active {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.32) 0%, rgba(59, 130, 246, 0.24) 100%) !important;
+  border-color: rgba(6, 182, 212, 0.65) !important;
+  color: #a5f3fc !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.35) !important;
+}
+
+/* Modal Card Dimensions — wider to fit two-column desktop layout */
+.modal-surfer-card {
+  width: 960px !important;
+  max-width: 96vw !important;
+}
+
+/* ─── Desktop two-column grid layout ────────────────────────────────────────
+   Left  (surfer-main-col)  : toolbar + status + discovery card  → scrollable
+   Right (surfer-aside-col) : Diario di Bordo                    → sticky
+   ─────────────────────────────────────────────────────────────────────────── */
+.surfer-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  grid-template-rows: auto;
+  gap: 16px;
+  /* The modal-card already clips overflow; body just needs to fill available height */
+  min-height: 0;
+  flex: 1;
+}
+
+/* Left column: stacks toolbar + status + discovery vertically, scrolls when tall */
+.surfer-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  -webkit-overflow-scrolling: touch;
+  /* custom thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+
+.surfer-main-col::-webkit-scrollbar {
+  width: 4px;
+}
+.surfer-main-col::-webkit-scrollbar-track {
+  background: transparent;
+}
+.surfer-main-col::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.14);
+  border-radius: 4px;
+}
+
+/* Right column: Diario di Bordo pinned, never scrolls the whole modal */
+.surfer-aside-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* sticky within the grid row so it stays visible while left col scrolls */
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+/* History panel fills the aside column and scrolls internally */
+.surfer-aside-col .surfer-history-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.surfer-aside-col .surfer-history-list {
+  max-height: 380px;
+  flex: 1;
+}
+
+/* ---- Surfer Toolbar ---- */
+.surfer-toolbar {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.surfer-mode-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.surfer-toolbar-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.surfer-pills {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 3px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.surfer-pill {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  padding: 4px 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+}
+
+.surfer-pill:hover {
+  color: var(--text-main);
+}
+
+.surfer-pill.active {
+  background: rgba(6, 182, 212, 0.2);
+  color: #67e8f9;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+}
+
+/* Actions Row */
+.surfer-actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-surfer-primary {
+  flex: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.45);
+  color: #a5f3fc;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-height: 40px;
+}
+
+.btn-surfer-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(59, 130, 246, 0.4) 100%);
+  border-color: rgba(6, 182, 212, 0.8);
+  color: #ecfeff;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.3);
+}
+
+.btn-surfer-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-surfer-secondary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 40px;
+}
+
+.btn-surfer-secondary:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-surfer-secondary.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+/* Options & Auto-pilot Timer */
+.surfer-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.surfer-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.surfer-checkbox-label input[type="checkbox"] {
+  accent-color: #06b6d4;
+  cursor: pointer;
+}
+
+.surfer-timer-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #6ee7b7;
+}
+
+.surfer-timer-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.surfer-timer-bar-track {
+  width: 50px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.surfer-timer-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: #10b981;
+  transition: width 0.25s linear;
+}
+
+/* ---- Live Status Banner ---- */
+.surfer-status-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  border-radius: 10px;
+}
+
+.surfer-spinner {
+  border-color: rgba(6, 182, 212, 0.25) !important;
+  border-top-color: #67e8f9 !important;
+}
+
+.surfer-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.surfer-status-step {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #67e8f9;
+}
+
+.surfer-status-detail {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+/* ---- Discovery Card ---- */
+.surfer-discovery-card {
+  background: rgba(10, 10, 18, 0.7);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 16px;
+  min-height: 200px;
+}
+
+.surfer-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  gap: 10px;
+}
+
+.surfer-empty-icon {
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.surfer-empty-state h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.surfer-empty-state p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+/* Content View */
+.surfer-content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.surfer-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.surfer-external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: #67e8f9;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  transition: color 0.2s ease;
+}
+
+.surfer-external-link:hover {
+  color: #a5f3fc;
+  text-decoration: underline;
+}
+
+.surfer-item-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+  line-height: 1.35;
+}
+
+.surfer-item-subtitle {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+}
+
+/* Text Box */
+.surfer-text-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 3px solid #06b6d4;
+  border-radius: 0 10px 10px 0;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.surfer-text-quote {
+  font-size: 0.88rem;
+  color: #e2e8f0;
+  line-height: 1.6;
+  font-style: italic;
+  white-space: pre-line;
+}
+
+/* Image Box */
+.surfer-image-box {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.surfer-image-wrapper {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.surfer-image-el {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+
+/* Analysis Section */
+.surfer-analysis-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+  margin-top: 14px;
+}
+
+/* ---- History Timeline ---- */
+.surfer-history-section {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.surfer-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+}
+
+.surfer-history-count {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.surfer-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.surfer-history-empty {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 6px 0;
+}
+
+.surfer-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.surfer-history-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.surfer-history-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.surfer-history-type-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.surfer-history-title {
+  font-size: 0.76rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.surfer-history-item-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.surfer-history-badge {
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   NAVIGATORE WEB — RESPONSIVE MOBILE OPTIMIZATIONS
+   ========================================================================== */
+@media (max-width: 768px) {
+  .modal-surfer-card {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 90vh !important;
+    border-radius: 24px 24px 0 0 !important;
+    padding: 12px 14px calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Collapse the two-column desktop grid to a single scrollable column on mobile */
+  .surfer-modal-body {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: calc(90vh - 75px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+  }
+
+  /* Left column: no inner scroll on mobile, parent handles it */
+  .surfer-main-col {
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+
+  /* Aside column: full width, no sticky on mobile */
+  .surfer-aside-col {
+    position: static !important;
+  }
+
+  .surfer-aside-col .surfer-history-list {
+    max-height: 120px !important;
+  }
+
+  .surfer-toolbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .surfer-mode-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .surfer-pills {
+    display: flex;
+    width: 100%;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 3px;
+  }
+
+  .surfer-pill {
+    flex: 1;
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 0.74rem;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .surfer-actions-row {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .btn-surfer-primary,
+  .btn-surfer-secondary {
+    min-height: 44px; /* iOS Human Interface Guidelines 44px tap target */
+    font-size: 0.82rem;
+    padding: 8px 12px;
+  }
+
+  .surfer-options-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .surfer-timer-status {
+    width: 100%;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.18);
+    border-radius: 8px;
+    box-sizing: border-box;
+  }
+
+  .surfer-discovery-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .surfer-item-title {
+    font-size: 1.02rem;
+    line-height: 1.35;
+  }
+
+  .surfer-item-subtitle {
+    font-size: 0.72rem;
+    margin-bottom: 10px;
+  }
+
+  .surfer-image-wrapper {
+    max-height: 200px;
+    border-radius: 10px;
+  }
+
+  .surfer-image-el {
+    max-height: 200px;
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .surfer-text-box {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  .surfer-text-quote {
+    font-size: 0.82rem;
+    max-height: 140px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .analyze-detected-banner {
+    padding: 10px 12px;
+  }
+
+  .surfer-history-section {
+    padding: 10px 12px;
+  }
+
+  .surfer-history-list {
+    max-height: 120px;
+  }
+
+  .surfer-history-item {
+    padding: 6px 8px;
+    min-height: 38px;
+  }
+
+  .surfer-history-title {
+    max-width: 170px;
+  }
+}
+
+@media (max-width: 420px) {
+  .surfer-actions-row {
+    flex-direction: column;
+  }
+
+  .btn-surfer-primary,
+  .btn-surfer-secondary {
+    width: 100%;
+  }
+
+  .surfer-pill {
+    font-size: 0.7rem;
+    padding: 6px 2px;
+  }
+
+  .surfer-history-title {
+    max-width: 130px;
+  }
+}
+
+
 

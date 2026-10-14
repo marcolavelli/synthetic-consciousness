@@ -92,6 +92,14 @@
           </svg>
           <span class="btn-text"><span class="desktop-only">Analizza </span>Immagine</span>
         </button>
+
+        <button id="btn-web-surfer-toggle" class="btn-header btn-surfer-header" title="Avvia il navigatore casuale del web ed esplora testi o immagini">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+          </svg>
+          <span class="btn-text"><span class="desktop-only">Navigatore </span>Web</span>
+        </button>
       </div>
     </header>
 
@@ -399,23 +407,6 @@
       </div>
       <div class="modal-body analyze-modal-body">
 
-        <!-- API Key Input -->
-        <div class="img-api-key-section" id="img-api-key-section">
-          <label class="img-api-label" for="img-api-key-input">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
-            </svg>
-            Gemini API Key <span class="img-api-hint">(salvata solo in sessione, non inviata a terzi)</span>
-          </label>
-          <div class="img-api-row">
-            <input type="password" id="img-api-key-input" class="img-api-input" placeholder="Inserisci la tua Gemini API Key..." autocomplete="off" spellcheck="false">
-            <button id="btn-save-api-key" class="btn-save-key">Salva</button>
-          </div>
-          <div class="img-api-note">
-            Ottieni gratuitamente su <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="img-api-link">Google AI Studio →</a>
-          </div>
-        </div>
-
         <!-- Drop Zone -->
         <div class="img-dropzone" id="img-dropzone">
           <input type="file" id="img-file-input" accept="image/*" style="display:none">
@@ -511,6 +502,188 @@
           </button>
 
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NAVIGATORE WEB RANDOMICO -->
+  <div class="modal-overlay" id="modal-web-surfer">
+    <div class="modal-card modal-analyze-card modal-surfer-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Navigatore Web Randomico</h2>
+          <p>L'entità scandaglia il web alla ricerca di frammenti di testo o immagini e ne decifra l'impronta emotiva in tempo reale.</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-web-surfer" aria-label="Chiudi modale">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body analyze-modal-body surfer-modal-body">
+
+        <!-- ═══ LEFT COLUMN: Toolbar + Status + Discovery ═══ -->
+        <div class="surfer-main-col">
+
+          <!-- Controls & Configuration Toolbar -->
+          <div class="surfer-toolbar">
+            <div class="surfer-mode-group">
+              <span class="surfer-toolbar-label">Filtro stimolo:</span>
+              <div class="surfer-pills">
+                <button class="surfer-pill active" data-surfer-mode="mixed">Casuale 50/50</button>
+                <button class="surfer-pill" data-surfer-mode="text">Solo Testo</button>
+                <button class="surfer-pill" data-surfer-mode="image">Solo Immagini</button>
+              </div>
+            </div>
+
+            <div class="surfer-actions-row">
+              <button id="btn-surfer-step" class="btn-surfer-primary" title="Cerca e analizza subito un nuovo contenuto dal web">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>
+                <span>Esplora Ora</span>
+              </button>
+
+              <button id="btn-surfer-autopilot" class="btn-surfer-secondary" title="Attiva/Disattiva la deriva continua autonoma">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span id="autopilot-btn-text">Pilota Automatico: OFF</span>
+              </button>
+            </div>
+
+            <div class="surfer-options-row">
+              <label class="surfer-checkbox-label">
+                <input type="checkbox" id="surfer-auto-apply" checked>
+                <span>Applica automaticamente la metamorfosi 3D all'entità</span>
+              </label>
+              <div class="surfer-timer-status" id="surfer-timer-status" style="display:none">
+                <span class="surfer-timer-dot"></span>
+                <span id="surfer-timer-countdown">Prossimo salto: 15s</span>
+                <div class="surfer-timer-bar-track">
+                  <div class="surfer-timer-bar-fill" id="surfer-timer-progress"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Status / Activity Banner -->
+          <div class="surfer-status-box" id="surfer-status-box" style="display:none">
+            <div class="img-spinner surfer-spinner"></div>
+            <div class="surfer-status-info">
+              <div class="surfer-status-step" id="surfer-status-step">Ricerca nel Web in corso...</div>
+              <div class="surfer-status-detail" id="surfer-status-detail">Interrogazione nodi enciclopedici e archivi aperti</div>
+            </div>
+          </div>
+
+          <!-- Active Content & Discovery Card -->
+          <div class="surfer-discovery-card" id="surfer-discovery-card">
+            <div class="surfer-empty-state" id="surfer-empty-state">
+              <div class="surfer-empty-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </div>
+              <h3>Navigatore in attesa di rotta</h3>
+              <p>Premi <strong>«Esplora Ora»</strong> per intercettare il primo frammento o avvia il <strong>«Pilota Automatico»</strong> per far vagare l'IA nello spazio web.</p>
+            </div>
+
+            <div class="surfer-content-view" id="surfer-content-view" style="display:none">
+              <!-- Header with Source Badge & External Link -->
+              <div class="surfer-content-header">
+                <div class="surfer-source-pill" id="surfer-source-pill">
+                  <span id="surfer-source-icon">🌐</span>
+                  <span id="surfer-source-name">Wikipedia</span>
+                </div>
+                <a id="surfer-external-link" class="surfer-external-link" href="#" target="_blank" rel="noopener noreferrer">
+                  <span>Vedi sul web</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </a>
+              </div>
+
+              <!-- Title & Culture Context -->
+              <h3 class="surfer-item-title" id="surfer-item-title">—</h3>
+              <div class="surfer-item-subtitle" id="surfer-item-subtitle">—</div>
+
+              <!-- Text Display (for text discoveries) -->
+              <div class="surfer-text-box" id="surfer-text-box" style="display:none">
+                <p class="surfer-text-quote" id="surfer-text-content">—</p>
+              </div>
+
+              <!-- Image Display (for image discoveries) -->
+              <div class="surfer-image-box" id="surfer-image-box" style="display:none">
+                <div class="surfer-image-wrapper">
+                  <img id="surfer-image-el" class="surfer-image-el" src="" alt="Elemento visivo scoperto">
+                </div>
+              </div>
+
+              <!-- Emotion Analysis Output (using created tools) -->
+              <div class="surfer-analysis-section" id="surfer-analysis-section">
+                <div class="analyze-detected-banner" id="surfer-detected-banner">
+                  <div class="analyze-detected-info">
+                    <div class="analyze-detected-label">Impronta emotiva rilevata</div>
+                    <div class="analyze-detected-name" id="surfer-detected-name">—</div>
+                    <div class="analyze-detected-sub" id="surfer-detected-sub">—</div>
+                  </div>
+                  <div class="analyze-confidence-ring" id="surfer-confidence-ring">
+                    <svg viewBox="0 0 44 44" class="ring-svg">
+                      <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                      <circle id="surfer-ring-progress" cx="22" cy="22" r="18" fill="none" stroke="currentColor" stroke-width="4"
+                        stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1"
+                        transform="rotate(-90 22 22)"/>
+                    </svg>
+                    <span id="surfer-ring-pct">0%</span>
+                  </div>
+                </div>
+
+                <!-- AI Description / Note -->
+                <div class="img-ai-desc" id="surfer-ai-desc" style="display:none"></div>
+
+                <!-- Plutchik Breakdown Bars -->
+                <div class="analyze-section-label">Vettore Plutchik decodificato</div>
+                <div class="analyze-bars" id="surfer-bars"></div>
+
+                <!-- Dataset match -->
+                <div class="analyze-section-label" style="margin-top:14px">Risonanza con l'Archivio Emotivo</div>
+                <div class="analyze-match-card" id="surfer-match-card"></div>
+
+                <!-- Manual Apply Button -->
+                <button id="btn-surfer-apply" class="btn-apply-analyzed" style="margin-top:12px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  Inietta questa emozione nell'entità sintetica
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.surfer-main-col -->
+
+        <!-- ═══ RIGHT COLUMN: Diario di Bordo (sticky sidebar) ═══ -->
+        <div class="surfer-aside-col">
+          <div class="surfer-history-section">
+            <div class="surfer-history-header">
+              <span>Diario di Bordo</span>
+              <span class="surfer-history-count" id="surfer-history-count">0 tappe</span>
+            </div>
+            <div class="surfer-history-list" id="surfer-history-list">
+              <div class="surfer-history-empty">Nessuna tappa ancora registrata.</div>
+            </div>
+          </div>
+        </div><!-- /.surfer-aside-col -->
+
       </div>
     </div>
   </div>
