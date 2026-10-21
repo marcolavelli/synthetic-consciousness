@@ -113,7 +113,15 @@ Il campo di testo dell'interfaccia permette all'utente di esprimere liberamente 
 - **Catalogo Esplorabile**: archivio completo delle 90 emozioni filtrabili per categoria teorica, area geografica o valenza.
 - **Analisi Emotiva del Testo (NLP Locale)**: analizza frasi e poesie estraendo le componenti della ruota di Plutchik senza dipendenze esterne.
 - **Analisi Emotiva dell'Immagine (Visione AI)**: carica una foto, disegno o ritratto per dedurre l'emozione visiva predominante tramite intelligenza artificiale multimodale (Google Gemini Vision).
-- **Navigatore Web Randomico**: naviga liberamente il web scandagliando articoli enciclopedici, citazioni o immagini aperte, decodificandone l'impronta emotiva e mutando l'entità 3D in tempo reale (in modalità manuale o pilota automatico continuo).
+- **Analisi Emotiva dell'Audio (Multimodale & Psicoacustica DSP)**: carica un file audio (voce, musica, paesaggio sonoro) o registra la tua voce dal vivo tramite microfono. L'architettura ibrida sfrutta l'IA multimodale (Google Gemini Audio) affiancata da un motore DSP locale su Web Audio API (energia RMS, brillanza spettrale, fattore di cresta e cadenza/flusso) con forma d'onda interattiva in tempo reale e mappatura sui vettori di Plutchik.
+- **Navigatore Web Randomico Multi-Canale**: naviga autonomamente l'infosfera globale intercettando ed estraendo l'impronta emotiva in tempo reale (in modalità manuale o pilota automatico continuo). Supporta filtri per canali e categorie tematiche:
+  - 📰 **Testate Giornalistiche Autorevoli**: *Reuters*, *Associated Press (AP)*, *BBC News*, *The Guardian*, *ANSA*.
+  - 💬 **Discussioni Pubbliche sui Social Network**: *Reddit*, *Bluesky (AT Protocol)*, *Mastodon (Fediverso)*, *X*.
+  - 📈 **Argomenti di Tendenza da Google Trends**: picchi e trend di ricerca in tempo reale (Italia e globale).
+  - 🌿 **Report e Indicatori di Benessere Umano**: *OMS / WHO* (salute globale e mentale), *Gallup World Poll* (Global Emotions Index), *World Happiness Report* (felicità soggettiva e coesione), *OCSE* (Better Life Index).
+  - 🔬 **Comunità Online Tematiche**: *Tecnologia* (Hacker News API), *Scienza* (arXiv, r/science), *Salute Mentale* (r/mentalhealth, mindfulness), *Lavoro & Carriera* (work-life balance, senso del lavoro), *Relazioni* (solidarietà e legami umani).
+  - 📚 **Enciclopedia & Arte Aperta**: *Wikipedia IT/EN*, *Wikimedia Commons* e archivi filosofici.
+  - Dotato di **Diario di Bordo** interattivo, calcolo del vettore Plutchik a 8 assi e metamorfosi 3D istantanea dell'entità sintetica.
 - **Sintetizzatore Sonoro Generativo (Web Audio API)**: drone binaurale con oscillatore doppio e filtro passa-basso risonante, che adatta frequenza e modulazione all'arousal dell'emozione corrente.
 
 ---

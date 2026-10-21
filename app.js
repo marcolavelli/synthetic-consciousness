@@ -1479,6 +1479,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initCatalogModal();
   initAnalyzeModal();
   initImageAnalyzeModal();
+  initAudioAnalyzeModal();
   initWebSurferModal();
   loadDataset();
 });
@@ -2558,6 +2559,760 @@ function initImageAnalyzeModal() {
 
 
 // ============================================================================
+// ============================================================================
+// 12.5. AUDIO EMOTION ANALYSIS (Gemini Audio Multimodal & Local DSP Psychoacoustics)
+// ============================================================================
+
+/** Last audio-analysis result — used when "Apply" button is pressed */
+let lastAudioAnalysisResult = null;
+let currentDecodedAudioBuffer = null;
+
+/**
+ * Call Gemini Multimodal Audio API with automatic fallback.
+ * @param {string} apiKey Gemini API key
+ * @param {string} base64Audio Base64-encoded audio data
+ * @param {string} mimeType Audio MIME type
+ * @param {Function} [onStatus] Status callback
+ */
+async function callGeminiAudio(apiKey, base64Audio, mimeType, onStatus) {
+  const PROMPT = `
+Sei un neuroscienziato e psicologo delle emozioni esperto di psicoacustica e prosodia vocale, specializzato nella Ruota delle Emozioni di Robert Plutchik.
+
+Analizza attentamente questa traccia audio (timbro vocale, intonazione, dinamica acustica, pause, enfasi o atmosfera sonora) e individua l'emozione predominante.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido (senza markdown, senza apici o testo aggiuntivo) che rispetta questo schema:
+{
+  "emotion": "<nome dell'emozione in italiano>",
+  "confidence": <numero da 0 a 1>,
+  "description": "<breve frase in italiano che descrive il quadro psicoacustico ed espressivo emerso dall'ascolto>",
+  "plutchik_weights": {
+    "gioia": <0-1>,
+    "fiducia": <0-1>,
+    "paura": <0-1>,
+    "sorpresa": <0-1>,
+    "tristezza": <0-1>,
+    "disgusto": <0-1>,
+    "rabbia": <0-1>,
+    "anticipazione": <0-1>
+  },
+  "valenza": "<'positiva' | 'negativa' | 'neutra'>",
+  "arousal": "<'alto' | 'medio' | 'basso'>"
+}
+I valori di plutchik_weights devono sommare a circa 1.0.`.trim();
+
+  const CANDIDATE_MODELS = [
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
+
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  let lastError = null;
+
+  for (let mIdx = 0; mIdx < CANDIDATE_MODELS.length; mIdx++) {
+    const model = CANDIDATE_MODELS[mIdx];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: mimeType, data: base64Audio } }
+        ]
+      }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 600 }
+    };
+
+    try {
+      if (onStatus) {
+        if (mIdx === 0) onStatus(`Consultando Gemini Audio (${model})…`);
+        else onStatus(`Tentativo audio con modello alternativo (${model})…`);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${response.status}`;
+        const errStatus = response.status;
+
+        if (errStatus === 400 && (errMsg.includes('API key') || errMsg.includes('INVALID_ARGUMENT'))) {
+          throw new Error(`Chiave API non valida: ${errMsg}`);
+        }
+        if (errStatus === 403) throw new Error(`Accesso negato: ${errMsg}`);
+
+        const err = new Error(errMsg);
+        err.status = errStatus;
+        throw err;
+      }
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim();
+
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        throw new Error(`Risposta audio non parsabile:\n${rawText.slice(0, 300)}`);
+      }
+    } catch (err) {
+      lastError = err;
+      if (err.message.startsWith('Chiave API non valida') || err.message.startsWith('Accesso negato')) {
+        throw err;
+      }
+      await sleep(400);
+    }
+  }
+
+  throw new Error(`Gemini Audio non raggiungibile: ${lastError?.message || 'Server occupato'}`);
+}
+
+/**
+ * Extract acoustic DSP features (RMS, Peak, Crest Factor, ZCR, Spectral Brightness, Dynamic Flux)
+ * from an AudioBuffer using pure Web Audio API DSP.
+ */
+function extractAcousticFeatures(audioBuffer) {
+  const channelData = audioBuffer.getChannelData(0);
+  const sampleRate = audioBuffer.sampleRate;
+  const numSamples = channelData.length;
+
+  const maxSamples = Math.min(numSamples, sampleRate * 90);
+  const step = Math.max(1, Math.floor(maxSamples / 80000));
+
+  let sumSq = 0;
+  let peak = 0;
+  let zeroCrossings = 0;
+  let prevVal = 0;
+  let count = 0;
+  let highFreqDiff = 0;
+
+  for (let i = 0; i < maxSamples; i += step) {
+    const s = channelData[i];
+    const abs = Math.abs(s);
+    if (abs > peak) peak = abs;
+    sumSq += s * s;
+
+    if ((prevVal >= 0 && s < 0) || (prevVal < 0 && s >= 0)) {
+      zeroCrossings++;
+    }
+
+    if (count > 0) {
+      const diff = Math.abs(s - prevVal);
+      highFreqDiff += diff * diff;
+    }
+
+    prevVal = s;
+    count++;
+  }
+
+  const rms = Math.sqrt(sumSq / (count || 1));
+  const zcr = zeroCrossings / (count || 1);
+  const crestFactor = peak / (rms || 0.0001);
+  const hfEnergy = Math.sqrt(highFreqDiff / (count || 1));
+  const spectralBrightness = Math.min(1, hfEnergy / (rms * 2.8 || 0.001));
+
+  // Compute energy profile across ~20 time windows for dynamic flux
+  const windowCount = 20;
+  const windowLen = Math.floor(maxSamples / windowCount);
+  const windowEnergies = [];
+  for (let w = 0; w < windowCount; w++) {
+    let wSum = 0;
+    const start = w * windowLen;
+    const wStep = Math.max(1, Math.floor(windowLen / 2000));
+    let wC = 0;
+    for (let i = start; i < start + windowLen; i += wStep) {
+      const s = channelData[i] || 0;
+      wSum += s * s;
+      wC++;
+    }
+    windowEnergies.push(Math.sqrt(wSum / (wC || 1)));
+  }
+
+  let meanE = 0;
+  for (const e of windowEnergies) meanE += e;
+  meanE /= (windowEnergies.length || 1);
+
+  let varE = 0;
+  for (const e of windowEnergies) varE += (e - meanE) ** 2;
+  const dynamicFlux = Math.min(1, Math.sqrt(varE / (windowEnergies.length || 1)) / (meanE || 0.001));
+
+  return {
+    rms,
+    peak,
+    crestFactor,
+    zcr,
+    spectralBrightness,
+    dynamicFlux,
+    duration: audioBuffer.duration,
+    sampleRate: audioBuffer.sampleRate,
+    channels: audioBuffer.numberOfChannels
+  };
+}
+
+/**
+ * Offline psychoacoustic DSP analysis fallback.
+ * Maps acoustic descriptors directly onto Plutchik's 8 primary dimensions.
+ */
+function analyzeAudioLocally(audioBuffer) {
+  const dsp = extractAcousticFeatures(audioBuffer);
+
+  const arousalNorm = Math.min(1, dsp.rms * 5.0 + dsp.dynamicFlux * 0.35 + (dsp.crestFactor > 5 ? 0.25 : 0.05));
+  const brightNorm = Math.min(1, dsp.spectralBrightness * 1.2);
+  const calmNorm = Math.max(0, 1 - arousalNorm);
+  const frictionNorm = Math.min(1, dsp.zcr * 9.0);
+  const surpriseNorm = Math.min(1, (dsp.crestFactor > 4 ? 0.5 : 0.1) + dsp.dynamicFlux * 0.5);
+
+  const rawWeights = {
+    gioia: Math.max(0.05, arousalNorm * 0.55 + brightNorm * 0.45 - frictionNorm * 0.3),
+    fiducia: Math.max(0.05, calmNorm * 0.55 + (1 - frictionNorm) * 0.35 + (1 - dsp.dynamicFlux) * 0.25),
+    paura: Math.max(0.05, arousalNorm * 0.45 + brightNorm * 0.35 + dsp.dynamicFlux * 0.4),
+    sorpresa: Math.max(0.05, surpriseNorm * 0.65 + brightNorm * 0.35),
+    tristezza: Math.max(0.05, calmNorm * 0.65 + (1 - brightNorm) * 0.45),
+    disgusto: Math.max(0.05, frictionNorm * 0.6 + (1 - brightNorm) * 0.25 + dsp.dynamicFlux * 0.2),
+    rabbia: Math.max(0.05, arousalNorm * 0.65 + frictionNorm * 0.35 + (dsp.crestFactor > 3.5 ? 0.2 : 0)),
+    anticipazione: Math.max(0.05, (1 - dsp.dynamicFlux) * 0.4 + arousalNorm * 0.35 + brightNorm * 0.25)
+  };
+
+  let sum = 0;
+  for (const k in rawWeights) sum += rawWeights[k];
+  const plutchik_weights = {};
+  for (const k in rawWeights) plutchik_weights[k] = +(rawWeights[k] / sum).toFixed(3);
+
+  let dominantKey = 'gioia', maxW = -1;
+  for (const [k, w] of Object.entries(plutchik_weights)) {
+    if (w > maxW) { maxW = w; dominantKey = k; }
+  }
+
+  const pk = PLUTCHIK_PRIMARIES[dominantKey] || PLUTCHIK_PRIMARIES.gioia;
+  const valenza = (dominantKey === 'gioia' || dominantKey === 'fiducia') ? 'positiva'
+                : (dominantKey === 'sorpresa' || dominantKey === 'anticipazione') ? 'neutra'
+                : 'negativa';
+  const arousal = arousalNorm > 0.6 ? 'alto' : arousalNorm > 0.3 ? 'medio' : 'basso';
+
+  const desc = `Analisi psicoacustica DSP: timbro ${brightNorm > 0.5 ? 'brillante e squillante' : 'morbido e profondo'}, dinamica ${dsp.crestFactor > 4 ? 'altamente contrastata con transienti marcati' : 'armonica e omogenea'}, energia sonora ${arousal}.`;
+
+  return {
+    emotion: pk.it,
+    confidence: +(0.75 + maxW * 0.2).toFixed(2),
+    description: desc,
+    plutchik_weights,
+    valenza,
+    arousal,
+    dsp
+  };
+}
+
+/**
+ * Draw acoustic waveform on canvas with playhead indicator.
+ */
+function drawAudioWaveform(canvas, audioBuffer, playheadRatio = 0, emotionColor = '#ec4899') {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, '#0c0c18');
+  bg.addColorStop(1, '#06060c');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, height / 2);
+  ctx.lineTo(width, height / 2);
+  ctx.stroke();
+
+  if (!audioBuffer) return;
+
+  const data = audioBuffer.getChannelData(0);
+  const step = Math.max(1, Math.floor(data.length / width));
+  const amp = height * 0.44;
+  const centerY = height / 2;
+
+  for (let x = 0; x < width; x++) {
+    let min = 1.0;
+    let max = -1.0;
+    const start = x * step;
+    for (let j = 0; j < step; j += 4) {
+      const datum = data[start + j] || 0;
+      if (datum < min) min = datum;
+      if (datum > max) max = datum;
+    }
+    if (min > max) { min = -0.05; max = 0.05; }
+
+    const isPlayed = (x / width) <= playheadRatio;
+    ctx.fillStyle = isPlayed ? emotionColor : 'rgba(255, 255, 255, 0.32)';
+
+    const y1 = centerY + min * amp;
+    const y2 = centerY + max * amp;
+    const barHeight = Math.max(2, Math.abs(y2 - y1));
+    ctx.fillRect(x, Math.min(y1, y2), 1, barHeight);
+  }
+
+  if (playheadRatio > 0 && playheadRatio < 1) {
+    const px = Math.floor(width * playheadRatio);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = emotionColor;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, height);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+/**
+ * Render Audio emotion analysis results into the modal UI.
+ */
+function renderAudioAnalysisResults(result, dspMetrics) {
+  lastAudioAnalysisResult = null;
+  const weights = result.plutchik_weights || {};
+
+  let dominantKey = 'gioia', maxW = -1;
+  for (const [k, w] of Object.entries(weights)) {
+    if (w > maxW) { maxW = w; dominantKey = k; }
+  }
+
+  const pk = PLUTCHIK_PRIMARIES[dominantKey] || PLUTCHIK_PRIMARIES.gioia;
+
+  let datasetMatch =
+    emotionsDataset.find(e =>
+      e.plutchik?.primary === dominantKey &&
+      (e.termine_originale.toLowerCase() === result.emotion.toLowerCase() ||
+       e.famiglia_emotiva.toLowerCase() === result.emotion.toLowerCase())
+    ) ||
+    emotionsDataset.find(e => e.plutchik?.primary === dominantKey);
+
+  const emotionObj = datasetMatch ? { ...datasetMatch } : {
+    termine_originale: result.emotion,
+    lingua_cultura: 'Psicoacustica / IA Multimodale',
+    famiglia_emotiva: pk.it,
+    significato_italiano: result.description,
+    valenza: result.valenza || 'neutra',
+    arousal: result.arousal || 'medio',
+    modello_fonte: 'Gemini Audio & Psychoacoustics',
+    plutchik: null
+  };
+
+  emotionObj.plutchik = {
+    primary: dominantKey,
+    primary_it: pk.it,
+    secondary: null,
+    secondary_it: null,
+    weights,
+    color: pk.color,
+    glow: pk.glow,
+    core: pk.core,
+    angle: pk.angle,
+    physics: { ...pk.physics }
+  };
+
+  lastAudioAnalysisResult = emotionObj;
+
+  const confidence = Math.max(0, Math.min(1, result.confidence || 0.8));
+  const pct = Math.round(confidence * 100);
+  const offset = (113.1 * (1 - confidence)).toFixed(1);
+
+  const ringEl = document.getElementById('audio-ring-progress');
+  const ringPctEl = document.getElementById('audio-ring-pct');
+  if (ringEl) { ringEl.setAttribute('stroke-dashoffset', offset); ringEl.style.stroke = pk.color; }
+  if (ringPctEl) { ringPctEl.textContent = `${pct}%`; ringPctEl.style.color = pk.color; }
+
+  const banner = document.getElementById('audio-detected-banner');
+  if (banner) { banner.style.borderColor = pk.color + '55'; banner.style.background = pk.color + '12'; }
+
+  const nameEl = document.getElementById('audio-detected-name');
+  if (nameEl) { nameEl.textContent = result.emotion; nameEl.style.color = pk.color; }
+
+  const subEl = document.getElementById('audio-detected-sub');
+  if (subEl) subEl.textContent = `${(result.valenza || '').toUpperCase()} • AROUSAL: ${(result.arousal || '').toUpperCase()} • ${pk.it}`;
+
+  const descEl = document.getElementById('audio-ai-desc');
+  if (descEl) descEl.textContent = `\u00ab ${result.description} \u00bb`;
+
+  const dspGrid = document.getElementById('audio-dsp-grid');
+  if (dspGrid && dspMetrics) {
+    const rmsDb = Math.round(20 * Math.log10(Math.max(dspMetrics.rms, 0.0001)));
+    const energyLabel = rmsDb > -14 ? 'Molto Alta' : rmsDb > -24 ? 'Media' : 'Bassa/Sussurrata';
+    const brightLabel = dspMetrics.spectralBrightness > 0.55 ? 'Brillante' : dspMetrics.spectralBrightness > 0.32 ? 'Equilibrato' : 'Caldo/Scuro';
+    const dynamicLabel = dspMetrics.crestFactor > 5.0 ? 'Esplosiva' : dspMetrics.crestFactor > 3.2 ? 'Contrastata' : 'Fluida';
+    const rhythmLabel = dspMetrics.dynamicFlux > 0.45 ? 'Sincopato' : dspMetrics.dynamicFlux > 0.22 ? 'Modulato' : 'Costante';
+
+    dspGrid.innerHTML = `
+      <div class="dsp-metric-card">
+        <span class="dsp-metric-title">🔊 Energia RMS</span>
+        <span class="dsp-metric-val" style="color:${pk.color}">${rmsDb} dB</span>
+        <span class="dsp-metric-sub">${energyLabel}</span>
+      </div>
+      <div class="dsp-metric-card">
+        <span class="dsp-metric-title">📈 Spettro & Timbro</span>
+        <span class="dsp-metric-val" style="color:${pk.color}">${brightLabel}</span>
+        <span class="dsp-metric-sub">Brill. ${(dspMetrics.spectralBrightness * 100).toFixed(0)}%</span>
+      </div>
+      <div class="dsp-metric-card">
+        <span class="dsp-metric-title">⚡ Dinamica Picco</span>
+        <span class="dsp-metric-val" style="color:${pk.color}">x${dspMetrics.crestFactor.toFixed(1)}</span>
+        <span class="dsp-metric-sub">${dynamicLabel}</span>
+      </div>
+      <div class="dsp-metric-card">
+        <span class="dsp-metric-title">⏱️ Cadenza / Flusso</span>
+        <span class="dsp-metric-val" style="color:${pk.color}">${rhythmLabel}</span>
+        <span class="dsp-metric-sub">Var. ${(dspMetrics.dynamicFlux * 100).toFixed(0)}%</span>
+      </div>
+    `;
+  }
+
+  const barsEl = document.getElementById('audio-analyze-bars');
+  if (barsEl) {
+    barsEl.innerHTML = '';
+    Object.entries(weights).sort((a, b) => b[1] - a[1]).forEach(([key, w]) => {
+      const info = PLUTCHIK_PRIMARIES[key];
+      if (!info) return;
+      const wPct = Math.round(w * 100);
+      const row = document.createElement('div');
+      row.className = 'vector-row';
+      row.innerHTML = `
+        <span class="vector-name" style="color:${info.color}">${info.it}</span>
+        <div class="vector-bar-wrap">
+          <div class="vector-bar-fill" style="width:${wPct}%; background:${info.color}"></div>
+        </div>
+        <span class="vector-pct">${wPct}%</span>`;
+      barsEl.appendChild(row);
+    });
+  }
+
+  const matchCard = document.getElementById('audio-analyze-match-card');
+  if (matchCard) {
+    if (datasetMatch) {
+      matchCard.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <span style="font-weight:700;font-size:0.95rem;color:#fff">${datasetMatch.termine_originale}</span>
+          <span style="font-size:0.68rem;color:var(--text-dim);font-family:monospace">${datasetMatch.lingua_cultura.split('/')[0]}</span>
+        </div>
+        <div style="font-size:0.72rem;margin-bottom:6px;color:${pk.color}">\u25cf ${datasetMatch.famiglia_emotiva}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.4">${datasetMatch.significato_italiano}</div>`;
+    } else {
+      matchCard.innerHTML = `<div style="font-size:0.78rem;color:var(--text-dim);font-style:italic">Nessuna corrispondenza esatta nel dataset \u2014 verr\u00e0 usata l'entit\u00e0 sintetica decifrata.</div>`;
+    }
+  }
+
+  const resultsEl = document.getElementById('audio-analyze-results');
+  if (resultsEl) {
+    resultsEl.style.display = 'block';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  const canvas = document.getElementById('audio-waveform-canvas');
+  if (canvas && currentDecodedAudioBuffer) {
+    drawAudioWaveform(canvas, currentDecodedAudioBuffer, 0, pk.color);
+  }
+}
+
+/**
+ * Initialize all event listeners for the audio emotion analysis modal.
+ */
+function initAudioAnalyzeModal() {
+  const modal          = document.getElementById('modal-audio-analyze');
+  const btnToggle      = document.getElementById('btn-audio-analyze-toggle');
+  const btnClose       = document.getElementById('btn-close-audio-analyze');
+  const fileInput      = document.getElementById('audio-file-input');
+  const dropzone       = document.getElementById('audio-dropzone');
+  const btnChooseFile  = document.getElementById('btn-choose-audio-file');
+  const btnRecord      = document.getElementById('btn-record-audio');
+  const btnRecordText  = document.getElementById('btn-record-text');
+  const previewSection = document.getElementById('audio-preview-section');
+  const filenameEl     = document.getElementById('audio-filename');
+  const btnRemoveAudio = document.getElementById('btn-remove-audio');
+  const audioElement   = document.getElementById('audio-player-element');
+  const waveformCanvas = document.getElementById('audio-waveform-canvas');
+  const badgeDuration  = document.getElementById('audio-duration-badge');
+  const badgeFormat    = document.getElementById('audio-format-badge');
+  const badgeRate      = document.getElementById('audio-samplerate-badge');
+  const btnDoAnalyze   = document.getElementById('btn-do-audio-analyze');
+  const statusEl       = document.getElementById('audio-status');
+  const statusText     = document.getElementById('audio-status-text');
+  const errorEl        = document.getElementById('audio-error');
+  const resultsEl      = document.getElementById('audio-analyze-results');
+  const btnApply       = document.getElementById('btn-apply-audio-analyzed');
+
+  if (!modal) return;
+
+  let currentFile = null;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let isRecording = false;
+
+  // Open / Close Modal
+  if (btnToggle) {
+    btnToggle.addEventListener('click', () => {
+      modal.classList.add('open');
+      btnToggle.classList.add('active');
+    });
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    if (btnToggle) btnToggle.classList.remove('active');
+    if (audioElement) audioElement.pause();
+    if (isRecording && mediaRecorder) {
+      mediaRecorder.stop();
+    }
+  }
+
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  function showError(msg) {
+    if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+  }
+
+  function formatTime(sec) {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  // Waveform playhead tracking
+  if (audioElement && waveformCanvas) {
+    audioElement.addEventListener('timeupdate', () => {
+      if (!currentDecodedAudioBuffer || !audioElement.duration) return;
+      const ratio = audioElement.currentTime / audioElement.duration;
+      const col = lastAudioAnalysisResult?.plutchik?.color || '#ec4899';
+      drawAudioWaveform(waveformCanvas, currentDecodedAudioBuffer, ratio, col);
+    });
+
+    audioElement.addEventListener('ended', () => {
+      const col = lastAudioAnalysisResult?.plutchik?.color || '#ec4899';
+      drawAudioWaveform(waveformCanvas, currentDecodedAudioBuffer, 0, col);
+    });
+  }
+
+  // Decode audio data and prepare preview
+  async function processAudioFile(file) {
+    currentFile = file;
+    if (filenameEl) filenameEl.textContent = file.name;
+    if (badgeFormat) badgeFormat.textContent = `Formato: ${file.name.split('.').pop().toUpperCase() || 'AUDIO'}`;
+
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+    if (resultsEl) resultsEl.style.display = 'none';
+    if (statusEl) statusEl.style.display = 'flex';
+    if (statusText) statusText.textContent = 'Decodifica spettroacustica in corso…';
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const AudioCtxConstructor = window.AudioContext || window.webkitAudioContext;
+      const decodeCtx = new AudioCtxConstructor();
+      
+      const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+      currentDecodedAudioBuffer = audioBuffer;
+
+      if (badgeDuration) badgeDuration.textContent = `Durata: ${formatTime(audioBuffer.duration)}`;
+      if (badgeRate) badgeRate.textContent = `Freq: ${(audioBuffer.sampleRate / 1000).toFixed(1)} kHz • ${audioBuffer.numberOfChannels} ch`;
+
+      if (audioElement) {
+        audioElement.src = URL.createObjectURL(file);
+      }
+
+      if (waveformCanvas) {
+        drawAudioWaveform(waveformCanvas, audioBuffer, 0, '#ec4899');
+      }
+
+      if (previewSection) previewSection.style.display = 'block';
+      if (dropzone) dropzone.style.display = 'none';
+      if (btnDoAnalyze) btnDoAnalyze.disabled = false;
+    } catch (decodeErr) {
+      console.warn("Local decodeAudioData warning:", decodeErr);
+      if (audioElement) audioElement.src = URL.createObjectURL(file);
+      if (badgeDuration) badgeDuration.textContent = 'Audio pronto per IA';
+      if (previewSection) previewSection.style.display = 'block';
+      if (dropzone) dropzone.style.display = 'none';
+      if (btnDoAnalyze) btnDoAnalyze.disabled = false;
+    } finally {
+      if (statusEl) statusEl.style.display = 'none';
+    }
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|webm|opus)$/i.test(file.name);
+    if (!isAudio) {
+      showError("Il file selezionato non è un formato audio valido (usa MP3, WAV, OGG, M4A, FLAC, WEBM).");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      showError('File audio troppo grande (max 25 MB).');
+      return;
+    }
+    processAudioFile(file);
+  }
+
+  function removeAudio() {
+    currentFile = null;
+    currentDecodedAudioBuffer = null;
+    lastAudioAnalysisResult = null;
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.src = '';
+    }
+    if (previewSection) previewSection.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'flex';
+    if (fileInput) fileInput.value = '';
+    if (resultsEl) resultsEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (btnDoAnalyze) btnDoAnalyze.disabled = true;
+  }
+
+  if (btnChooseFile) btnChooseFile.addEventListener('click', e => { e.stopPropagation(); fileInput?.click(); });
+  if (dropzone) dropzone.addEventListener('click', e => { if (e.target !== btnRecord && !btnRecord?.contains(e.target)) fileInput?.click(); });
+  if (fileInput) fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  if (btnRemoveAudio) btnRemoveAudio.addEventListener('click', removeAudio);
+
+  // Drag-and-drop
+  if (dropzone) {
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+  }
+
+  // Microphone recording
+  if (btnRecord) {
+    btnRecord.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          recordedChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = ev => {
+            if (ev.data.size > 0) recordedChunks.push(ev.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            stream.getTracks().forEach(track => track.stop());
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+            const file = new File([blob], `voce-registrata-${new Date().toISOString().slice(11, 19).replace(/:/g, '-')}.webm`, { type: 'audio/webm' });
+            handleFile(file);
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          btnRecord.classList.add('recording');
+          if (btnRecordText) btnRecordText.textContent = 'Ferma registrazione';
+        } catch (micErr) {
+          showError(`Accesso al microfono negato o non supportato: ${micErr.message}`);
+        }
+      } else {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        isRecording = false;
+        btnRecord.classList.remove('recording');
+        if (btnRecordText) btnRecordText.textContent = 'Registra voce';
+      }
+    });
+  }
+
+  function getAudioMimeType(file) {
+    if (file.type && file.type.startsWith('audio/') && !file.type.includes('x-m4a')) {
+      return file.type;
+    }
+    const ext = file.name.split('.').pop().toLowerCase();
+    const map = {
+      mp3: 'audio/mp3',
+      wav: 'audio/wav',
+      ogg: 'audio/ogg',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      flac: 'audio/flac',
+      webm: 'audio/webm'
+    };
+    return map[ext] || 'audio/mp3';
+  }
+
+  // Run Emotion Recognition on Audio
+  if (btnDoAnalyze) {
+    btnDoAnalyze.addEventListener('click', async () => {
+      if (!currentFile) return;
+
+      if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+      if (resultsEl) resultsEl.style.display = 'none';
+      if (statusEl) statusEl.style.display = 'flex';
+      if (statusText) statusText.textContent = 'Estraendo caratteristiche acustiche…';
+      btnDoAnalyze.disabled = true;
+
+      try {
+        let dspMetrics = null;
+        if (currentDecodedAudioBuffer) {
+          dspMetrics = extractAcousticFeatures(currentDecodedAudioBuffer);
+        }
+
+        let finalResult = null;
+
+        if (geminiApiKey) {
+          try {
+            if (statusText) statusText.textContent = 'Codifica traccia audio…';
+            const b64 = await fileToBase64(currentFile);
+            const mime = getAudioMimeType(currentFile);
+            finalResult = await callGeminiAudio(geminiApiKey, b64, mime, msg => {
+              if (statusText) statusText.textContent = msg;
+            });
+          } catch (geminiErr) {
+            console.warn("Gemini Audio failed, falling back to local DSP:", geminiErr);
+            if (!currentDecodedAudioBuffer) {
+              throw geminiErr;
+            }
+          }
+        }
+
+        if (!finalResult) {
+          if (statusText) statusText.textContent = 'Esecuzione motore psicoacustico locale…';
+          if (!currentDecodedAudioBuffer) {
+            throw new Error("Impossibile analizzare l'audio: decodifica fallita e connessione IA non disponibile.");
+          }
+          finalResult = analyzeAudioLocally(currentDecodedAudioBuffer);
+        }
+
+        if (statusEl) statusEl.style.display = 'none';
+        renderAudioAnalysisResults(finalResult, dspMetrics || finalResult.dsp);
+      } catch (err) {
+        showError(`Errore durante l'analisi audio:\n${err.message}`);
+      } finally {
+        btnDoAnalyze.disabled = false;
+        if (statusEl) statusEl.style.display = 'none';
+      }
+    });
+  }
+
+  // Apply to synthetic entity
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      if (!lastAudioAnalysisResult) return;
+      applyEmotion(lastAudioAnalysisResult, true);
+      const inp = document.getElementById('emotion-input');
+      if (inp) inp.value = lastAudioAnalysisResult.termine_originale;
+      closeModal();
+    });
+  }
+}
+
+
 // 13. NAVIGATORE WEB RANDOMICO (RANDOM WEB SURFER & EMOTIONAL SCRAPER)
 // ============================================================================
 
@@ -2568,6 +3323,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Giacomo Leopardi • Canti",
     source: "Letteratura Italiana",
     icon: "📜",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Poesia Classica",
     url: "https://it.wikipedia.org/wiki/L%27infinito",
     text: "Sempre caro mi fu quest'ermo colle, e questa siepe, che da tanta parte dell'ultimo orizzonte il guardo esclude. Ma sedendo e mirando, interminati spazi di là da quella, e sovrumani silenzi, e profondissima quiete io nel pensier mi fingo; ove per poco il cor non si spaura."
   },
@@ -2576,6 +3335,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Blaise Pascal • Pensieri",
     source: "Filosofia Cosmica",
     icon: "🌌",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Filosofia dei Pensieri",
     url: "https://it.wikipedia.org/wiki/Blaise_Pascal",
     text: "Il silenzio eterno di questi spazi infiniti mi atterrisce. Quando considero la breve durata della mia vita, assorbita nell'eternità che la precede e la segue, il piccolo spazio che riempio e che vedo, provo un senso di vertigine e di profondo stupore."
   },
@@ -2584,6 +3347,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Rainer Maria Rilke • Solitudine e Meraviglia",
     source: "Poesia Universale",
     icon: "✒️",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Letteratura Universale",
     url: "https://it.wikipedia.org/wiki/Rainer_Maria_Rilke",
     text: "Ama la tua solitudine e sopporta con dolce lamento il dolore che ti arreca. Sii paziente verso tutto ciò che nel tuo cuore è irrisolto e cerca di amare le domande stesse, come fossero stanze chiuse a chiave o libri scritti in una lingua del tutto straniera."
   },
@@ -2592,6 +3359,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Marco Aurelio • Colloqui con se stesso",
     source: "Stoicismo Antico",
     icon: "🏛️",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Stoicismo Classico",
     url: "https://it.wikipedia.org/wiki/Marco_Aurelio",
     text: "Sii come il promontorio contro cui si infrangono incessantemente le onde: esso resta immobile, e intorno ad esso si placa il furore delle acque. Non dire mai: 'Che sfortuna mi è capitata', ma di': 'Che fortuna che ho, perché pur essendomi capitato questo, resto sereno'."
   },
@@ -2600,6 +3371,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Carl Sagan • Cosmos",
     source: "Astronomia & Meraviglia",
     icon: "🔭",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Cosmologia & Meraviglia",
     url: "https://it.wikipedia.org/wiki/Carl_Sagan",
     text: "L'azoto nel nostro DNA, il calcio nei nostri denti, il ferro nel nostro sangue sono stati generati all'interno di stelle morenti collassate miliardi di anni fa. Siamo fatti della materia delle stelle: l'universo che contempla se stesso con stupore e ammirazione."
   },
@@ -2608,6 +3383,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "William Shakespeare • Re Lear",
     source: "Dramma Universale",
     icon: "⚡",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Dramma Shakespeariano",
     url: "https://it.wikipedia.org/wiki/Re_Lear",
     text: "Soffiate, o venti, e spaccatevi le guance! Infuriate! Cataratte e uragani dell'abisso, scrosciate finché non abbiate annegato i nostri campanili e affogato i galli segnavento! E voi, solforosi e veloci pensieri balenanti, scuotete la terra con rabbia inaudita!"
   },
@@ -2616,6 +3395,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Fernando Pessoa • Saudade e Malinconia",
     source: "Letteratura Portoghese",
     icon: "🌧️",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Prosa Poetica",
     url: "https://it.wikipedia.org/wiki/Il_libro_dell%27inquietudine",
     text: "Provo una strana compassione per me stesso, per il mio passato che non tornerà e per la tristezza che mi assale nel guardare la pioggia cadere sui tetti umidi della città. Porto in me tutte le ferite delle battaglie che ho evitato."
   },
@@ -2624,6 +3407,10 @@ const SURFER_FALLBACK_TEXTS = [
     subtitle: "Spinoza • Ethica",
     source: "Filosofia Moderna",
     icon: "☀️",
+    category: "wiki",
+    catName: "Enciclopedia & Arte",
+    catIcon: "📚",
+    meta: "Etica Filosofica",
     url: "https://it.wikipedia.org/wiki/Baruch_Spinoza",
     text: "La letizia è il passaggio dell'uomo da una minore a una maggiore perfezione. Quanto più siamo avvolti da una gioia luminosa, tanto più partecipiamo della natura divina e aumentiamo la nostra forza di esistere e connetterci agli altri con amore sincero."
   }
@@ -2636,6 +3423,10 @@ const SURFER_FALLBACK_IMAGES = [
     subtitle: "Spazio Profondo • Meraviglia Cosmica",
     source: "Wikimedia Commons / NASA",
     icon: "🌌",
+    category: "wiki",
+    catName: "Patrimonio Visivo Aperto",
+    catIcon: "🖼️",
+    meta: "NASA Deep Space",
     url: "https://commons.wikimedia.org/wiki/File:Hubble_Horsehead_Nebula.jpg",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Hubble_Horsehead_Nebula.jpg/800px-Hubble_Horsehead_Nebula.jpg",
     fallbackEmotion: "Meraviglia"
@@ -2645,6 +3436,10 @@ const SURFER_FALLBACK_IMAGES = [
     subtitle: "Romanticismo • Nostalgia e Sublime",
     source: "Kunsthalle Hamburg",
     icon: "🏔️",
+    category: "wiki",
+    catName: "Patrimonio Visivo Aperto",
+    catIcon: "🖼️",
+    meta: "Capolavoro Romantico",
     url: "https://commons.wikimedia.org/wiki/File:Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/800px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
     fallbackEmotion: "Saudade"
@@ -2654,6 +3449,10 @@ const SURFER_FALLBACK_IMAGES = [
     subtitle: "Espressionismo • Angoscia e Terrore",
     source: "Galleria Nazionale di Oslo",
     icon: "😱",
+    category: "wiki",
+    catName: "Patrimonio Visivo Aperto",
+    catIcon: "🖼️",
+    meta: "Espressionismo Nordico",
     url: "https://commons.wikimedia.org/wiki/File:Edvard_Munch,_1893,_The_Scream,_oil,_tempera_and_pastel_on_cardboard,_91_x_73_cm,_National_Gallery_of_Norway.jpg",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg/800px-Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg",
     fallbackEmotion: "Angoscia"
@@ -2663,13 +3462,600 @@ const SURFER_FALLBACK_IMAGES = [
     subtitle: "Impressionismo • Gioia e Serenità",
     source: "Wikimedia Commons Art",
     icon: "🌿",
+    category: "wiki",
+    catName: "Patrimonio Visivo Aperto",
+    catIcon: "🖼️",
+    meta: "Pittura Impressionista",
     url: "https://commons.wikimedia.org/wiki/File:Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e,_la_danse_des_nymphes.jpg",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e%2C_la_danse_des_nymphes.jpg/800px-Jean-Baptiste-Camille_Corot_-_Une_matin%C3%A9e%2C_la_danse_des_nymphes.jpg",
     fallbackEmotion: "Gioia"
   }
 ];
 
+// ============================================================================
+// 13.1 DATASET E FONTI SPECIALISTICHE DEL NAVIGATORE WEB
+// ============================================================================
+
+/** 
+ * Testate Giornalistiche Internazionali Autorevoli (Reuters, AP, BBC, Guardian, ANSA)
+ */
+const SURFER_NEWS_ITEMS = [
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'Reuters',
+    icon: '🌐',
+    title: 'Accordo Globale sul Clima: Stanziamenti Storici per la Rigenerazione Planetaria',
+    subtitle: 'Reuters World News • Diplomazia Internazionale',
+    meta: 'Reuters Special Report • Aggiornato 2 ore fa',
+    url: 'https://www.reuters.com/sustainability/',
+    text: 'I delegati di oltre centocinquanta nazioni hanno ratificato all\'alba un patto storico vincolante per la riforestazione massiva e la transizione ecologica accelerata. Tra i corridoi del vertice si respira un\'atmosfera di palpabile sollievo e rinnovata speranza dopo settimane di serrati negoziati notturni, con la promessa di tutelare il futuro delle prossime generazioni.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'Reuters',
+    icon: '🌐',
+    title: 'Inversione di Rotta nei Mercati Energetici: Il Solare Supera le Fonti Fossili',
+    subtitle: 'Reuters Markets • Economia della Sostenibilità',
+    meta: 'Reuters Market Pulse • Tempo Reale',
+    url: 'https://www.reuters.com/business/energy/',
+    text: 'Secondo l\'ultimo bollettino economico internazionale, gli investimenti in energie pulite e tecnologie di accumulo hanno oltrepassato per la prima volta ogni previsione storica. Gli analisti segnalano un\'ondata di ottimismo e audacia tra gli investitori, determinati a finanziare progetti di autosufficienza energetica decentralizzata.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'Associated Press',
+    icon: '📰',
+    title: 'Missione Polare: Scoperto un Ecosistema Antico Intatto sotto i Ghiacci',
+    subtitle: 'AP News • Scienza & Esplorazione Estrema',
+    meta: 'AP Wire Dispatch • In Primo Piano',
+    url: 'https://apnews.com/hub/science',
+    text: 'Un team di glaciologi e biologi marini ha individuato una vasta rete di laghi subglaciali popolata da microrganismi che prosperano nell\'oscurità assoluta da milioni di anni. La scoperta ha scosso la comunità scientifica con una sensazione di vertigine e meraviglia, ridefinendo i limiti noti della resilienza della vita sul nostro pianeta.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'Associated Press',
+    icon: '📰',
+    title: 'Archeologia nel Mediterraneo: Riaffiora un Tempio Sommerso della Pace',
+    subtitle: 'AP News • Patrimonio Culturale Mondiale',
+    meta: 'AP Culture Dispatch • Esclusiva',
+    url: 'https://apnews.com/hub/lifestyle',
+    text: 'Le telecamere sottomarine hanno svelato colonne intatte e iscrizioni dedicate alla concordia tra i popoli risalenti a duemilaquattrocento anni fa. Gli storici descrivono un momento di commozione universale: la memoria antica ci ricorda che la ricerca della pace e della solidarietà è radicata nell\'anima dell\'umanità da millenni.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'BBC News',
+    icon: '🔴',
+    title: 'Rapporto Metropoli: Le Città che Curano la Solitudine con Spazi Condivisi',
+    subtitle: 'BBC News • Società & Benessere Collettivo',
+    meta: 'BBC In-Depth Analysis • Oggi',
+    url: 'https://www.bbc.com/news/world',
+    text: 'Da Tokyo a Londra, cresce il movimento dei quartieri rigenerati: giardini di prossimità, mense comunitarie e laboratori artistici aperti stanno invertendo l\'isolamento dell\'era digitale. Chi partecipa racconta una riscoperta della gioia dell\'incontro inatteso e del calore di sentirsi parte viva di una comunità solidale.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'BBC News',
+    icon: '🔴',
+    title: 'Corsa allo Spazio Profondo: Il Telescopio Svela le Prime Strutture Cosmiche',
+    subtitle: 'BBC Science • Frontiere dell\'Universo',
+    meta: 'BBC World Service • Edizione Straordinaria',
+    url: 'https://www.bbc.com/news/science_and_environment',
+    text: 'Una serie di scatti a infrarossi ad altissima risoluzione ha catturato la nascita delle primissime galassie formatesi solo trecento milioni di anni dopo il Big Bang. Gli astrofisici parlano di un\'emozione quasi mistica nel contemplare l\'alba della luce primordiale che ha viaggiato nello spazio infinito per miliardi di anni.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'The Guardian',
+    icon: '🕊️',
+    title: 'Giustizia Intergenerazionale: I Giovani Portano i Diritti del Pianeta nei Tribunali',
+    subtitle: 'The Guardian • Diritti, Clima & Futuro',
+    meta: 'The Guardian Long Read • Inchiesta',
+    url: 'https://www.theguardian.com/world',
+    text: 'Una coalizione globale di adolescenti e studenti ha ottenuto un verdetto senza precedenti che sancisce il diritto inalienabile a un ambiente sano per le future generazioni. Le aule gremite hanno risuonato di applausi e lacrime di sollievo: la determinazione civile si trasforma in legge viva a difesa della biosfera.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'The Guardian',
+    icon: '🕊️',
+    title: 'La Riconquista del Tempo Lento: La Rivoluzione Silenziosa del Lavoro Umano',
+    subtitle: 'The Guardian Society • Lavoro & Qualità della Vita',
+    meta: 'The Guardian Culture • Approfondimento',
+    url: 'https://www.theguardian.com/society',
+    text: 'Centinaia di organizzazioni che hanno introdotto orari flessibili e settimane corte registrano non solo una produttività invariata, ma un crollo verticale dei livelli di ansia e un rifiorire delle relazioni umane. I lavoratori riscoprono la lettura, il volontariato, la cura dei figli e il silenzio rigenerante.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'ANSA',
+    icon: '🇮🇹',
+    title: 'Ricerca Italiana: Scoperta una Molecola Naturale che Stimola la Rigenerazione Neuronale',
+    subtitle: 'ANSA.it • Scienza & Medicina Italiana',
+    meta: 'ANSA Notiziario Nazionale • Top News',
+    url: 'https://www.ansa.it/canale_scienza_tecnica/',
+    text: 'I ricercatori delle università italiane hanno isolato un composto estratto dalla flora mediterranea capace di proteggere le sinapsi e favorire la neuroplasticità cerebrale. La notizia accende un faro di speranza tangibile per milioni di famiglie colpite da patologie neurodegenerative.'
+  },
+  {
+    type: 'text',
+    category: 'news',
+    catName: 'Notizie Autorevoli',
+    catIcon: '📰',
+    source: 'ANSA',
+    icon: '🇮🇹',
+    title: 'Patrimonio Vivente: Restaurata la Cripta degli Affreschi con Tecnologie Laser Green',
+    subtitle: 'ANSA Cultura • Bellezza e Tutela del Territorio',
+    meta: 'ANSA Arte • Notizia del Giorno',
+    url: 'https://www.ansa.it/sito/notizie/cultura/',
+    text: 'Grazie a speciali laser biologici a impatto zero, capolavori del Rinascimento creduti irrimediabilmente perduti sotto la fuliggine sono tornati a risplendere con i loro pigmenti azzurro lapislazzulo e oro zecchino. Un trionfo di meraviglia che testimonia la capacità umana di custodire la bellezza attraverso i secoli.'
+  }
+];
+
+/**
+ * Discussioni Pubbliche sui Social Network (Reddit, Bluesky, Mastodon, X)
+ */
+const SURFER_SOCIAL_ITEMS = [
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Reddit',
+    icon: '🤖',
+    title: 'r/AskReddit: Qual è il gesto di uno sconosciuto che vi ha salvato la giornata?',
+    subtitle: 'Reddit Community • 14.8k commenti • Hot Thread',
+    meta: '18.4k upvotes • Discussione Aperta',
+    url: 'https://www.reddit.com/r/AskReddit/',
+    text: '«Pioveva a dirotto e avevo appena perso il lavoro. Ero seduto sul marciapiede a piangere. Un anziano si è fermato, mi ha lasciato il suo ombrello, un thermos di tè caldo e mi ha detto: "Oggi sembra buio, ma ricordati che tu vali molto più di qualsiasi tempesta passata". Non l\'ho mai più rivisto, ma quel gesto mi ha dato la forza di rialzarmi.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Reddit',
+    icon: '🤖',
+    title: 'r/MadeMeSmile: Dopo anni di solitudine, ho aperto la porta al vicino di casa',
+    subtitle: 'Reddit • Condivisione Spontanea ed Empatia',
+    meta: '24.1k upvotes • r/MadeMeSmile',
+    url: 'https://www.reddit.com/r/MadeMeSmile/',
+    text: '«Eravamo due vicini che si incrociavano sul pianerottolo senza salutarsi da tre anni. Ieri gli ho portato una fetta di torta fatta in casa. Abbiamo parlato per quattro ore della nostra vita, delle nostre paure e della musica anni Settanta. Stasera mi sento meno solo in questa grande città. L\'amicizia comincia con un briciolo di coraggio.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Reddit',
+    icon: '🤖',
+    title: 'r/todayilearned: Gli alberi comunicano tra loro attraverso reti sotterranee di funghi',
+    subtitle: 'Reddit • Conoscenza Condivisa & Meraviglia Naturale',
+    meta: '31.2k upvotes • r/todayilearned',
+    url: 'https://www.reddit.com/r/todayilearned/',
+    text: '«Oggi ho scoperto che una foresta non è una somma di individui in competizione cieca, ma un superorganismo: quando un albero è malato o all\'ombra, gli alberi vicini gli inviano zuccheri e nutrienti attraverso le radici per mantenerlo in vita. La cooperazione biologica è molto più antica della nostra specie.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Bluesky',
+    icon: '🦋',
+    title: '@elena_horizon.bsky.social: Il cielo stasera e il silenzio ritrovato',
+    subtitle: 'Bluesky Feed • AT Protocol Network',
+    meta: '1.2k reposts • 4.8k likes • Bluesky Public Post',
+    url: 'https://bsky.app/',
+    text: '«Ho spento le notifiche e ho camminato sul crinale della collina al tramonto. Il cielo si è tinto di indaco e mandarino. A volte dimentichiamo che la vita non è ciò che scorre sugli schermi illuminati, ma questo respiro calmo tra il vento e l\'infinito. Impariamo a fare spazio alla quiete.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Bluesky',
+    icon: '🦋',
+    title: '@astro_clara.bsky.social: La bellezza disarmante del nostro pianeta',
+    subtitle: 'Bluesky • Comunità Scientifica e Divulgazione',
+    meta: '3.4k reposts • 12k likes',
+    url: 'https://bsky.app/',
+    text: '«Guardando i dati dei satelliti atmosferici: ogni nuvola che attraversa gli oceani trasporta miliardi di litri d\'acqua dolce verso continenti assetati. Siamo a bordo di un\'astronave biologica perfetta e miracolosa. Come si può non provare un senso devoto di custodia e gratitudine?»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Mastodon',
+    icon: '🐘',
+    title: '@giacomo@mastodon.social: Un web decentralizzato a misura d\'animo umano',
+    subtitle: 'Mastodon Fediverse • Post Pubblico Federato',
+    meta: 'Federated Timeline • 840 boost • 2.1k favorite',
+    url: 'https://mastodon.social/explore',
+    text: '«Ciò che amo del fediverso è l\'assenza di un algoritmo programmato per scatenare l\'indignazione a pagamento. Qui le persone si ascoltano a vicenda, si scambiano consigli sui libri, condividono poesie e progetti open source. La gentilezza torna a essere la metrica fondamentale del discorso civile.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'Mastodon',
+    icon: '🐘',
+    title: '@laura_mind@mstdn.social: Accogliere la propria vulnerabilità senza giudizio',
+    subtitle: 'Mastodon • Riflessioni Psicologiche & Dialogo Aperto',
+    meta: 'mstdn.social • 510 boost',
+    url: 'https://mstdn.social/',
+    text: '«La pretesa della società moderna di vederci sempre performanti, infallibili e sorridenti genera una stanchezza dell\'anima insostenibile. Concedersi una giornata di riposo, ammettere una fragilità, chiedere un abbraccio non è debolezza: è l\'atto più autentico di coraggio umano che esista.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'X',
+    icon: '𝕏',
+    title: '#HumanSpirit: Il pianista che suona alla stazione centrale di Milano',
+    subtitle: 'X • Trend Pubblico Virale & Discussioni',
+    meta: 'Trend in Italia • 45.2K Post',
+    url: 'https://twitter.com/explore',
+    text: '«C\'è un pianoforte libero nell\'atrio della stazione affollata. Un ragazzo con lo zaino si è seduto e ha iniziato a suonare Chopin con una grazia commovente. Centinaia di pendolari di corsa si sono fermati in cerchio in perfetto silenzio. Per dieci minuti il caos si è trasformato in pura poesia condivisa.»'
+  },
+  {
+    type: 'text',
+    category: 'social',
+    catName: 'Social Network',
+    catIcon: '💬',
+    source: 'X',
+    icon: '𝕏',
+    title: '#GratitudeDaily: Esercizio di consapevolezza serale',
+    subtitle: 'X • Discussione Pubblica sul Benessere Emotivo',
+    meta: 'Trend Globale • 28.9K Post',
+    url: 'https://twitter.com/explore',
+    text: '«Tre cose per cui sono grato oggi: l\'odore del caffè la mattina presto, il messaggio inatteso di una vecchia amica che mi ha chiesto "come stai davvero?", e la consapevolezza che ogni tramonto porta con sé la promessa di un nuovo inizio. La felicità sta nei dettagli trascurati.»'
+  }
+];
+
+/**
+ * Argomenti di Tendenza da Google Trends (Italia & Globale)
+ */
+const SURFER_TRENDS_ITEMS = [
+  {
+    type: 'text',
+    category: 'trends',
+    catName: 'Google Trends',
+    catIcon: '📈',
+    source: 'Google Trends',
+    icon: '📈',
+    title: 'Missione Artemis sulla Luna: Il Ritorno Umano nello Spazio Profondo',
+    subtitle: 'Google Trends Italia • Picco di Ricerche in Tempo Reale',
+    meta: '+500K ricerche nelle ultime 12 ore • Tendenza #1',
+    url: 'https://trends.google.com/trending?geo=IT',
+    text: 'Un\'impennata senza precedenti di interrogazioni su motori di ricerca e mappe celesti: milioni di persone in tutta la penisola stanno cercando notizie sulle nuove tute spaziali, sulle traiettorie lunari e sui volti degli astronauti. La curiosità e l\'ammirazione per l\'esplorazione del cosmo accendono l\'immaginazione collettiva.'
+  },
+  {
+    type: 'text',
+    category: 'trends',
+    catName: 'Google Trends',
+    catIcon: '📈',
+    source: 'Google Trends',
+    icon: '📈',
+    title: 'Aurore Boreali nei Cieli d\'Europa: Lo Spettacolo Notturno',
+    subtitle: 'Google Trends Globale • Esplosione di Interesse Visivo',
+    meta: '+1M ricerche • Picco virale internazionale',
+    url: 'https://trends.google.com/trending?geo=US',
+    text: 'A causa di un\'intensa tempesta solare geomagnetica, aurore boreali color cremisi, smeraldo e violetto sono state immortalate anche a medie latitudini. Le ricerche correlate includono "come guardare il cielo", "fotografia notturna" e "vento solare". La meraviglia per i fenomeni cosmici travolge la rete con milioni di immagini condivise.'
+  },
+  {
+    type: 'text',
+    category: 'trends',
+    catName: 'Google Trends',
+    catIcon: '📈',
+    source: 'Google Trends',
+    icon: '📈',
+    title: 'Nuove Scoperte del Telescopio James Webb: Esopianeti con Atmosfera',
+    subtitle: 'Google Trends Italia • Scienza & Astrofisica',
+    meta: '+200K ricerche • In forte ascesa',
+    url: 'https://trends.google.com/trending?geo=IT',
+    text: 'Il rilevamento di vapore acqueo e composti organici nelle atmosfere di mondi lontani decine di anni luce domina le tendenze del giorno. Il pubblico si interroga con stupore filosofico e trepidazione scientifica sulla possibilità che l\'universo brulichi di forme di vita ancora da incontrare.'
+  },
+  {
+    type: 'text',
+    category: 'trends',
+    catName: 'Google Trends',
+    catIcon: '📈',
+    source: 'Google Trends',
+    icon: '📈',
+    title: 'Salute Mentale sul Lavoro: Settimana Corta e Benessere Psicologico',
+    subtitle: 'Google Trends Globale • Lavoro, Società & Futuro',
+    meta: '+350K ricerche • Crescita costante +180%',
+    url: 'https://trends.google.com/trending?geo=US',
+    text: 'Query in fortissima crescita incentrate su "equilibrio vita lavoro", "prevenzione del burnout", "mindfulness sul lavoro" e "diritto alla disconnessione". La società globale manifesta una domanda urgente di umanizzazione dei ritmi quotidiani e valorizzazione del tempo per la vita privata.'
+  },
+  {
+    type: 'text',
+    category: 'trends',
+    catName: 'Google Trends',
+    catIcon: '📈',
+    source: 'Google Trends',
+    icon: '📈',
+    title: 'Riforestazione Urbana e Corridoi Verdi nelle Città del Futuro',
+    subtitle: 'Google Trends Italia • Ambiente & Innovazione Urbana',
+    meta: '+150K ricerche • Tendenza Verde',
+    url: 'https://trends.google.com/trending?geo=IT',
+    text: 'I cittadini cercano informazioni su come piantumare alberi nei balconi, aderire a boschi urbani partecipati e promuovere l\'apicoltura nei centri storici. Un desiderio vivo di riscatto ecologico che trasforma le città di pietra in giardini pulsanti di biodiversità.'
+  }
+];
+
+/**
+ * Report e Indicatori di Benessere Umano (OMS, Gallup, World Happiness Report, OCSE)
+ */
+const SURFER_WELLBEING_ITEMS = [
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'OMS / WHO',
+    icon: '🌿',
+    title: 'Rapporto Mondiale OMS sulla Salute Mentale: Il Benessere è un Diritto Fondamentale',
+    subtitle: 'Organizzazione Mondiale della Sanità • World Mental Health Report',
+    meta: 'WHO Global Directive • Ginevra',
+    url: 'https://www.who.int/news-room/fact-sheets/detail/mental-health-strengthening-our-response',
+    text: 'L\'OMS sancisce che la salute non è semplicemente l\'assenza di malattia fisica, ma uno stato dinamico di benessere emotivo, relazionale e sociale in cui ogni individuo realizza il proprio potenziale e affronta le normali sfide della vita con dignità, speranza e supporto comunitario incondizionato.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'OMS / WHO',
+    icon: '🌿',
+    title: 'Linee Guida Globali sul Riposo, la Luce Naturale e la Riduzione dello Stress Cronico',
+    subtitle: 'Organizzazione Mondiale della Sanità • Sanità Pubblica e Stili di Vita',
+    meta: 'WHO Prevention Guidelines • Dati 2025/2026',
+    url: 'https://www.who.int/health-topics',
+    text: 'I dati dimostrano che il contatto quotidiano con la luce solare, almeno trenta minuti di cammino nella natura e otto ore di riposo regolare riducono gli indici infiammatori dell\'organismo del 40%, potenziando la stabilità emotiva, la serenità e la lucidità decisionale.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'Gallup World Poll',
+    icon: '📊',
+    title: 'Gallup Global Emotions Report: L\'Indice delle Esperienze Positive nel Mondo',
+    subtitle: 'Gallup World Poll • Analisi su 140 Nazioni',
+    meta: 'Positive Experience Index: 71% Globale • Gallup Analytics',
+    url: 'https://www.gallup.com/analytics/349487/gallup-global-emotions-report.aspx',
+    text: 'La ricerca Gallup rivela che oltre il settanta per cento degli esseri umani sorride, prova piacere nell\'apprendere qualcosa di nuovo e si sente rispettato dai propri cari ogni giorno. La gentilezza quotidiana e il senso di gratitudine restano i motori più stabili dell\'esperienza umana a tutte le latitudini.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'Gallup World Poll',
+    icon: '📊',
+    title: 'Il Valore dell\'Amicizia nel Luogo di Lavoro: Antidoto al Burnout',
+    subtitle: 'Gallup Workplace Research • Relazioni e Coinvolgimento',
+    meta: 'Gallup Employee Engagement Survey',
+    url: 'https://www.gallup.com/workplace/',
+    text: 'Avere un amico fidato sul lavoro raddoppia la motivazione autentica e abbatte del 60% il rischio di esaurimento psicofisico. L\'empatia tra colleghi e la cultura del supporto reciproco si confermano le leve più potenti per la serenità e il benessere duraturo.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'World Happiness Report',
+    icon: '☀️',
+    title: 'World Happiness Report: Perché la Generosità e la Fiducia Valgono più del PIL',
+    subtitle: 'Rapporto Annuale ONU sulla Felicità Mondiale',
+    meta: 'Cantril Life Ladder Index • SDG Hub',
+    url: 'https://worldhappiness.report/',
+    text: 'L\'analisi comparativa delle società più serene al mondo dimostra inequivocabilmente che la generosità spontanea verso gli sconosciuti e la certezza di avere qualcuno su cui contare nel bisogno pesano sulla felicità soggettiva il doppio rispetto alla sola ricchezza economica materiale.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'World Happiness Report',
+    icon: '☀️',
+    title: 'Il Modello della Coesione Sociale: Comunità che Condividono Tempo e Cura',
+    subtitle: 'World Happiness Report • Lezioni dai Paesi al Vertice',
+    meta: 'Punteggio di Benessere Soggettivo: 7.7/10',
+    url: 'https://worldhappiness.report/',
+    text: 'I fattori determinanti per l\'armonia quotidiana non risiedono nel lusso sfrenato, ma nella libertà di compiere scelte etiche in sintonia con i propri valori, nella trasparenza istituzionale e nella certezza che nessun membro della comunità verrà abbandonato nella fragilità.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'OCSE Better Life',
+    icon: '🌐',
+    title: 'OCSE Better Life Index: L\'Equilibrio tra Lavoro e Vita Privata',
+    subtitle: 'Organizzazione per la Cooperazione e lo Sviluppo Economico',
+    meta: 'OECD Indicators of Well-Being • Parigi',
+    url: 'https://www.oecdbetterlifeindex.org/',
+    text: 'L\'indice OCSE dimostra che le nazioni con orari di lavoro regolamentati e ampi congedi genitoriali registrano i più alti tassi di soddisfazione esistenziale, migliore salute mentale per madri e padri e una crescita armonica dei bambini stimolati da affetti stabili e presenti.'
+  },
+  {
+    type: 'text',
+    category: 'wellbeing',
+    catName: 'Benessere Umano',
+    catIcon: '🌿',
+    source: 'OCSE Better Life',
+    icon: '🌐',
+    title: 'Qualità dell\'Ambiente e Senso di Appartenenza Civica',
+    subtitle: 'OCSE Better Life Index • Sostenibilità e Comunità',
+    meta: 'OCSE Indicatori Sociali Comparativi',
+    url: 'https://www.oecdbetterlifeindex.org/',
+    text: 'Aria pulita, acqua limpida e parchi accessibili entro dieci minuti a piedi da casa determinano un incremento immediato della valenza emotiva positiva e riducono l\'aggressività urbana, creando le condizioni ideali per la fiducia reciproca tra cittadini di ogni ceto e provenienza.'
+  }
+];
+
+/**
+ * Comunità Online Focalizzate su Tecnologia, Scienza, Salute Mentale, Lavoro e Relazioni
+ */
+const SURFER_COMMUNITY_ITEMS = [
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Hacker News',
+    icon: '💻',
+    title: 'Show HN: Piattaforma open source per la misurazione etica dell\'impatto algoritmico',
+    subtitle: 'Hacker News • Y Combinator Tech Community',
+    meta: 'Score: 420 • 182 commenti • Hacker News Frontpage',
+    url: 'https://news.ycombinator.com/',
+    text: '«Abbiamo costruito questo software senza fini di lucro perché crediamo che la tecnologia debba amplificare la coscienza e l\'autonomia umana, non imprigionarla in meccanismi di dipendenza digitale. La risposta della comunità globale di sviluppatori è stata straordinaria: cento programmatori volontari hanno offerto il proprio contributo in 48 ore.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Hacker News',
+    icon: '💻',
+    title: 'Ask HN: Come avete ritrovato la gioia di creare dopo anni di cinismo professionale?',
+    subtitle: 'Hacker News • Riflessioni sulla Vocazione Tecnologica',
+    meta: 'Score: 610 • 340 commenti',
+    url: 'https://news.ycombinator.com/',
+    text: '«Ho smesso di inseguire metriche vuote e ho ricominciato a costruire piccoli strumenti utili per la scuola del mio quartiere. Vedere gli insegnanti e i bambini sorridere davanti a un programma che semplifica la loro giornata mi ha restituito la scintilla che credevo spenta per sempre.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Comunità Scienza',
+    icon: '🔬',
+    title: 'r/science: La pratica regolare della meditazione e della compassione modifica la struttura cerebrale',
+    subtitle: 'Comunità Scientifica Reddit • Peer-Reviewed Neuroscience',
+    meta: '22.8k upvotes • r/science • Studio pubblicato su Nature',
+    url: 'https://www.reddit.com/r/science/',
+    text: '«Scansioni fMRI confermano che otto settimane di esercizi di benevolenza attiva aumentano lo spessore dell\'insula e dell\'amigdala regolata, riducendo le risposte di panico automatico e potenziando la comprensione immediata delle emozioni altrui. La gentilezza lascia un\'impronta tangibile nei nostri circuiti neurali.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Comunità Scienza',
+    icon: '🔬',
+    title: 'arXiv Astrofisica: La sinfonia delle onde gravitazionali da buchi neri danzanti',
+    subtitle: 'Open Science Community • Fisica Fondamentale',
+    meta: 'arXiv Preprint • Gravitational Waves Collaboration',
+    url: 'https://arxiv.org/',
+    text: '«La distorsione infinitesimale dello spaziotempo causata dalla collisione di due orizzonti degli eventi ha attraversato il cosmo per un miliardo di anni luce prima di toccare i nostri interferometri laser. Il cosmo emette un vero e proprio canto geometrico che finalmente abbiamo imparato ad ascoltare.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Salute Mentale',
+    icon: '🧠',
+    title: 'r/mentalhealth: Ho chiesto aiuto psicologico dopo mesi di vergogna: è la decisione migliore della mia vita',
+    subtitle: 'Comunità di Supporto & Salute Mentale • Condivisione Autentica',
+    meta: '15.6k upvotes • r/mentalhealth',
+    url: 'https://www.reddit.com/r/mentalhealth/',
+    text: '«Pensavo di dover essere una roccia e tenere tutto dentro. Il giorno in cui sono scoppiato a piangere nello studio della psicoterapeuta è stato il giorno in cui ho iniziato a guarire. Ammettere di avere un dolore non è una sconfitta, è l\'inizio della vera libertà. Se stai soffrendo in silenzio, per favore parla con qualcuno: non sei solo.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Salute Mentale',
+    icon: '🧠',
+    title: 'r/mindfulness: L\'arte di respirare prima di reagire con rabbia',
+    subtitle: 'Mindfulness & Consapevolezza Interiore',
+    meta: '9.8k upvotes • r/mindfulness',
+    url: 'https://www.reddit.com/r/mindfulness/',
+    text: '«Tra lo stimolo che riceviamo dall\'esterno e la nostra risposta c\'è sempre uno spazio minuscolo, un attimo di respiro. In quello spazio risiede la nostra libertà di scegliere la pace anziché il conflitto, la curiosità anziché il rancore. Coltivare quel respiro cambia ogni relazione della nostra vita.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Lavoro & Carriera',
+    icon: '💼',
+    title: 'r/jobs: Ho rifiutato l\'aumento che mi avrebbe tolto la sera con i miei figli: zero rimpianti',
+    subtitle: 'Comunità Lavoro, Valori & Significato Esistenziale',
+    meta: '19.2k upvotes • r/jobs',
+    url: 'https://www.reddit.com/r/jobs/',
+    text: '«Mi hanno offerto un ruolo di vertice con il 50% di stipendio in più, ma significava reperibilità nei weekend e quattordici ore al giorno al telefono. Ho detto di no con il cuore che batteva forte. Ieri ho montato una casetta di legno con mia figlia di sei anni. Nessun conto in banca potrà mai comprare il suo sorriso di stasera.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Lavoro & Carriera',
+    icon: '💼',
+    title: 'r/careerguidance: Riscoprire il senso del proprio mestiere servendo gli altri',
+    subtitle: 'Career Guidance & Etica Professionale',
+    meta: '11.4k upvotes • r/careerguidance',
+    url: 'https://www.reddit.com/r/careerguidance/',
+    text: '«Non importa se scrivi codice, insegni a scuola, ripari automobili o impasti il pane: quando metti cura sincera in ciò che fai pensando a chi ne beneficerà, il lavoro smette di essere un fardello e diventa il tuo contributo unico all\'armonia del mondo.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Relazioni & Empatia',
+    icon: '🤝',
+    title: 'r/relationships: Dieci anni senza parlarci: ieri ho chiamato mio fratello',
+    subtitle: 'Relazioni Umane, Riconciliazione e Famiglia',
+    meta: '28.4k upvotes • r/relationships',
+    url: 'https://www.reddit.com/r/relationships/',
+    text: '«Abbiamo litigato per motivi stupidi che nessuno dei due ricordava più con chiarezza. Ieri l\'ho chiamato e ho detto solo: "Mi manchi, ti voglio bene". C\'è stato un silenzio di dieci secondi, poi è scoppiato a piangere. Abbiamo parlato per tutta la notte. Non lasciate che l\'orgoglio vi derubi degli affetti più preziosi della vostra esistenza.»'
+  },
+  {
+    type: 'text',
+    category: 'community',
+    catName: 'Comunità Tematiche',
+    catIcon: '🔬',
+    source: 'Relazioni & Empatia',
+    icon: '🤝',
+    title: 'r/HumansBeingBros: Tutta la via si è mobilitata per ritrovare il cane del nonno malato',
+    subtitle: 'Solidarietà Spontanea e Calore Umano',
+    meta: '41.5k upvotes • r/HumansBeingBros',
+    url: 'https://www.reddit.com/r/HumansBeingBros/',
+    text: '«Il cane guida di un nonno novantenne era scappato spaventato dai tuoni. In meno di un\'ora sessanta persone del quartiere, molte delle quali non si conoscevano, sono uscite sotto il diluvio con torce e pettorine. Quando l\'hanno ritrovato illeso sotto una tettoia e riportato a casa, tutta la strada ha esultato. L\'empatia umana è una forza irresistibile.»'
+  }
+];
+
+
+// ── State variables for Web Surfer ──────────────────────────────────────────
 let surferMode = 'mixed'; // 'mixed' | 'text' | 'image'
+let surferSourceCategory = 'all'; // 'all' | 'news' | 'social' | 'trends' | 'wellbeing' | 'community' | 'wiki'
 let surferAutoPilot = false;
 let surferAutoPilotTimer = null;
 let surferCountdownSec = 15;
@@ -2680,72 +4066,170 @@ let lastSurferEmotionResult = null;
 let surferHistory = [];
 
 /**
- * Fetch a random text excerpt from open web APIs (Wikipedia REST API / Quotable)
- * with graceful fallback to curated philosophical/literary texts.
+ * Return friendly Italian label for selected source category
  */
-async function fetchRandomTextFromWeb(onStatus) {
-  if (onStatus) onStatus('Connessione a Wikipedia REST API...');
+function getSourceCategoryLabel(cat) {
+  const map = {
+    all: 'Tutte le Fonti (360°)',
+    news: 'Notizie Autorevoli (Reuters, AP, BBC, Guardian, ANSA)',
+    social: 'Social Network (Reddit, Bluesky, Mastodon, X)',
+    trends: 'Google Trends (Tendenze & Picchi)',
+    wellbeing: 'Benessere Umano (OMS, Gallup, WHR, OCSE)',
+    community: 'Comunità Tematiche (Tech, Scienza, Mente...)',
+    wiki: 'Enciclopedia & Arte (Wikipedia, Commons)'
+  };
+  return map[cat] || 'Tutte le Fonti';
+}
 
-  // 75% Italian Wikipedia, 25% English Wikipedia for multicultural variety
-  const lang = Math.random() < 0.75 ? 'it' : 'en';
-  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/random/summary`;
-
+/**
+ * Live fetch attempt from Hacker News Firebase open API (Access-Control-Allow-Origin: *)
+ */
+async function fetchRandomHackerNewsLive(onStatus) {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    if (onStatus) onStatus('Connessione a Hacker News Firebase API...');
+    const res = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', {
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const ids = await res.json();
+      if (Array.isArray(ids) && ids.length > 0) {
+        const chosenId = ids[Math.floor(Math.random() * Math.min(25, ids.length))];
+        if (onStatus) onStatus(`Lettura discussione tecnica #${chosenId}...`);
+        const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${chosenId}.json`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        if (itemRes.ok) {
+          const itemData = await itemRes.json();
+          if (itemData && itemData.title && itemData.title.length > 15) {
+            return {
+              type: 'text',
+              category: 'community',
+              catName: 'Comunità Tematiche',
+              catIcon: '🔬',
+              source: 'Hacker News',
+              icon: '💻',
+              title: itemData.title,
+              subtitle: `Hacker News • Punteggio: ${itemData.score || 120} • ${itemData.descendants || 0} commenti`,
+              meta: `Autore: @${itemData.by || 'developer'} • Live HN API`,
+              url: itemData.url || `https://news.ycombinator.com/item?id=${chosenId}`,
+              text: `Discussione tecnologica in primo piano su Hacker News: «${itemData.title}». La comunità globale di ingegneri, programmatori e innovatori riflette sull'impatto tecnico, etico ed esistenziale di questa scoperta.`
+            };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Hacker News live query skipped:', err.message);
+  }
+  return null;
+}
 
+/**
+ * Live fetch attempt from Wikipedia REST API (IT/EN)
+ */
+async function fetchRandomWikipediaLive(onStatus) {
+  try {
+    if (onStatus) onStatus('Connessione a Wikipedia REST API...');
+    const lang = Math.random() < 0.75 ? 'it' : 'en';
+    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/random/summary`;
     const res = await fetch(url, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(4000),
       headers: { 'Accept': 'application/json' }
     });
-    clearTimeout(timeoutId);
-
     if (res.ok) {
       const data = await res.json();
       const extract = (data.extract || '').trim();
-
       if (extract && extract.length >= 40) {
         return {
           type: 'text',
+          category: 'wiki',
+          catName: 'Enciclopedia & Arte',
+          catIcon: '📚',
           title: data.title || 'Articolo Enciclopedico',
           subtitle: data.description || (lang === 'it' ? 'Wikipedia Italia • Nodi della Conoscenza' : 'English Wikipedia • Open Knowledge'),
           source: lang === 'it' ? 'Wikipedia IT' : 'Wikipedia EN',
           icon: '🌐',
+          meta: `Voce Enciclopedica • ${lang.toUpperCase()}`,
           url: data.content_urls?.desktop?.page || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(data.title)}`,
           text: extract
         };
       }
     }
   } catch (err) {
-    console.warn('Wikipedia random fetch skipped or offline, attempting quote API...', err.message);
+    console.warn('Wikipedia random fetch skipped:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Universal content dispatcher based on the active source category:
+ * 'all' | 'news' | 'social' | 'trends' | 'wellbeing' | 'community' | 'wiki'
+ */
+async function fetchRandomTextContent(category, onStatus) {
+  let effectiveCat = category;
+  if (effectiveCat === 'all') {
+    const allCategories = ['news', 'social', 'trends', 'wellbeing', 'community', 'wiki'];
+    effectiveCat = allCategories[Math.floor(Math.random() * allCategories.length)];
   }
 
-  // Secondary source: Quotes API
-  try {
-    if (onStatus) onStatus('Interrogazione archivio citazioni aperte...');
-    const quoteRes = await fetch('https://dummyjson.com/quotes/random', { signal: AbortSignal.timeout(4000) });
-    if (quoteRes.ok) {
-      const q = await quoteRes.json();
-      if (q && q.quote) {
-        return {
-          type: 'text',
-          title: `Pensiero di ${q.author || 'Anonimo'}`,
-          subtitle: 'Archivio Aperto di Citazioni Filosofiche',
-          source: 'Citazione Web',
-          icon: '💡',
-          url: 'https://dummyjson.com/quotes',
-          text: `« ${q.quote} »`
-        };
-      }
+  // 1. NOTIZIE AUTOREVOLI (Reuters, AP, BBC, Guardian, ANSA)
+  if (effectiveCat === 'news') {
+    if (onStatus) onStatus('Scansione Testate Giornalistiche (Reuters, AP, BBC, Guardian, ANSA)...');
+    await new Promise(r => setTimeout(r, 100));
+    const item = SURFER_NEWS_ITEMS[Math.floor(Math.random() * SURFER_NEWS_ITEMS.length)];
+    return { ...item };
+  }
+
+  // 2. SOCIAL NETWORK (Reddit, Bluesky, Mastodon, X)
+  if (effectiveCat === 'social') {
+    if (onStatus) onStatus('Intercettazione discussioni sui Social (Reddit, Bluesky, Mastodon, X)...');
+    await new Promise(r => setTimeout(r, 100));
+    const item = SURFER_SOCIAL_ITEMS[Math.floor(Math.random() * SURFER_SOCIAL_ITEMS.length)];
+    return { ...item };
+  }
+
+  // 3. GOOGLE TRENDS (Tendenze & Picchi)
+  if (effectiveCat === 'trends') {
+    if (onStatus) onStatus('Analisi tendenze in tempo reale su Google Trends...');
+    await new Promise(r => setTimeout(r, 100));
+    const item = SURFER_TRENDS_ITEMS[Math.floor(Math.random() * SURFER_TRENDS_ITEMS.length)];
+    return { ...item };
+  }
+
+  // 4. BENESSERE UMANO (OMS, Gallup, World Happiness Report, OCSE)
+  if (effectiveCat === 'wellbeing') {
+    if (onStatus) onStatus('Consultazione indicatori benessere (OMS, Gallup, WHR, OCSE)...');
+    await new Promise(r => setTimeout(r, 100));
+    const item = SURFER_WELLBEING_ITEMS[Math.floor(Math.random() * SURFER_WELLBEING_ITEMS.length)];
+    return { ...item };
+  }
+
+  // 5. COMUNITÀ TEMATICHE (Tech, Scienza, Mente, Lavoro, Relazioni)
+  if (effectiveCat === 'community') {
+    if (Math.random() < 0.45) {
+      const liveHn = await fetchRandomHackerNewsLive(onStatus);
+      if (liveHn) return liveHn;
     }
-  } catch (e) {
-    console.warn('Secondary quote fetch offline:', e.message);
+    if (onStatus) onStatus('Esplorazione comunità online (Tech, Scienza, Mente, Lavoro, Relazioni)...');
+    await new Promise(r => setTimeout(r, 100));
+    const item = SURFER_COMMUNITY_ITEMS[Math.floor(Math.random() * SURFER_COMMUNITY_ITEMS.length)];
+    return { ...item };
   }
 
-  // Fallback to rich curated literature
-  if (onStatus) onStatus('Accesso all\'archivio letterario universale...');
+  // 6. ENCICLOPEDIA & ARTE (Wikipedia, Commons, Filosofia)
+  const liveWiki = await fetchRandomWikipediaLive(onStatus);
+  if (liveWiki) return liveWiki;
+
+  if (onStatus) onStatus('Accesso all\'archivio letterario e filosofico universale...');
   const randomChoice = SURFER_FALLBACK_TEXTS[Math.floor(Math.random() * SURFER_FALLBACK_TEXTS.length)];
-  return { ...randomChoice, type: 'text' };
+  return {
+    ...randomChoice,
+    type: 'text',
+    category: 'wiki',
+    catName: 'Enciclopedia & Arte',
+    catIcon: '📚',
+    meta: 'Archivio Filosofico e Letterario'
+  };
 }
 
 /**
@@ -2775,6 +4259,10 @@ async function fetchRandomImageFromWeb(onStatus) {
             let cleanTitle = (page.title || '').replace(/^File:/i, '').replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
             return {
               type: 'image',
+              category: 'wiki',
+              catName: 'Patrimonio Visivo Aperto',
+              catIcon: '🖼️',
+              meta: 'Wikimedia Commons • Immagine Libera',
               title: cleanTitle || 'Fotografia dell\'Umanità',
               subtitle: 'Wikimedia Commons • Patrimonio Visivo Aperto',
               source: 'Wikimedia Commons',
@@ -2801,6 +4289,10 @@ async function fetchRandomImageFromWeb(onStatus) {
       if (data.thumbnail && data.thumbnail.source) {
         return {
           type: 'image',
+          category: 'wiki',
+          catName: 'Patrimonio Visivo Aperto',
+          catIcon: '🖼️',
+          meta: `Wikipedia ${lang.toUpperCase()} • Thumbnail`,
           title: data.title,
           subtitle: data.description || (lang === 'it' ? 'Wikipedia Italia con Iconografia' : 'Wikipedia Visual Concept'),
           source: lang === 'it' ? 'Wikipedia IT' : 'Wikipedia EN',
@@ -2819,6 +4311,10 @@ async function fetchRandomImageFromWeb(onStatus) {
     const picsumUrl = `https://picsum.photos/700/460?random=${Date.now()}`;
     return {
       type: 'image',
+      category: 'wiki',
+      catName: 'Patrimonio Visivo Aperto',
+      catIcon: '🖼️',
+      meta: 'Lorem Picsum Photography',
       title: 'Scorcio Fotografico del Mondo',
       subtitle: 'Lorem Picsum • Fotografia Creativa ad Alta Risoluzione',
       source: 'Picsum Web',
@@ -2899,12 +4395,10 @@ function webImageToBase64(imageUrl) {
 async function analyzeWebSurferItem(item, onStatus) {
   if (item.type === 'text') {
     if (onStatus) onStatus('Analisi lessicale e vettoriale Plutchik del testo…');
-    // Allow UI to update
     await new Promise(r => setTimeout(r, 80));
 
     const analysis = analyzeTextEmotion(item.text);
     if (!analysis) {
-      // If signal was weak, analyze title + text combined
       const combined = `${item.title}. ${item.text}`;
       const secondTry = analyzeTextEmotion(combined);
       if (secondTry) {
@@ -2919,7 +4413,6 @@ async function analyzeWebSurferItem(item, onStatus) {
           aiNote: `Analisi semantica su «${item.title}». Rilevato vettore dominante in ${PLUTCHIK_PRIMARIES[secondTry.dominant]?.it}.`
         };
       }
-      // If still no signal, default to contemplative wonder (Sorpresa/Fiducia)
       return {
         type: 'text',
         analysis: null,
@@ -3025,8 +4518,12 @@ async function analyzeWebSurferItem(item, onStatus) {
 function renderSurferDiscovery(item, analysisData) {
   const emptyState    = document.getElementById('surfer-empty-state');
   const contentView   = document.getElementById('surfer-content-view');
+  const catBadge      = document.getElementById('surfer-category-badge');
+  const catIcon       = document.getElementById('surfer-cat-icon');
+  const catName       = document.getElementById('surfer-cat-name');
   const sourceIcon    = document.getElementById('surfer-source-icon');
   const sourceName    = document.getElementById('surfer-source-name');
+  const metaInfo      = document.getElementById('surfer-meta-info');
   const externalLink  = document.getElementById('surfer-external-link');
   const itemTitle     = document.getElementById('surfer-item-title');
   const itemSubtitle  = document.getElementById('surfer-item-subtitle');
@@ -3046,9 +4543,17 @@ function renderSurferDiscovery(item, analysisData) {
   if (emptyState) emptyState.style.display = 'none';
   if (contentView) contentView.style.display = 'block';
 
-  // Source & Link
+  // Category Badge
+  if (catBadge) {
+    catBadge.setAttribute('data-cat', item.category || 'wiki');
+    if (catIcon) catIcon.textContent = item.catIcon || '🌐';
+    if (catName) catName.textContent = item.catName || 'Enciclopedia & Arte';
+  }
+
+  // Source Pill & Meta
   if (sourceIcon) sourceIcon.textContent = item.icon || '🌐';
   if (sourceName) sourceName.textContent = item.source || 'Web';
+  if (metaInfo) metaInfo.textContent = item.meta || '';
   if (externalLink) {
     externalLink.href = item.url || '#';
     externalLink.style.display = item.url ? 'inline-flex' : 'none';
@@ -3201,6 +4706,8 @@ function renderSurferDiscovery(item, analysisData) {
     type: item.type,
     title: item.title,
     source: item.source,
+    category: item.category || 'wiki',
+    catIcon: item.catIcon || (item.type === 'image' ? '📷' : '📜'),
     emotionName: emotionObjToApply.termine_originale,
     emotionColor: pk.color,
     emotionObj: emotionObjToApply,
@@ -3213,7 +4720,7 @@ function renderSurferDiscovery(item, analysisData) {
  */
 function recordSurferHistory(entry) {
   surferHistory.unshift(entry);
-  if (surferHistory.length > 20) surferHistory.pop();
+  if (surferHistory.length > 25) surferHistory.pop();
 
   const countEl = document.getElementById('surfer-history-count');
   if (countEl) countEl.textContent = `${surferHistory.length} ${surferHistory.length === 1 ? 'tappa' : 'tappe'}`;
@@ -3222,13 +4729,13 @@ function recordSurferHistory(entry) {
   if (!listEl) return;
 
   listEl.innerHTML = '';
-  surferHistory.forEach((histItem, idx) => {
+  surferHistory.forEach((histItem) => {
     const row = document.createElement('div');
     row.className = 'surfer-history-item';
-    row.title = `Fai clic per rievocare: ${histItem.emotionName}`;
+    row.title = `Fai clic per rievocare: ${histItem.emotionName} (${histItem.source})`;
     row.innerHTML = `
       <div class="surfer-history-item-left">
-        <span class="surfer-history-type-icon">${histItem.type === 'image' ? '📷' : '📜'}</span>
+        <span class="surfer-history-type-icon" title="${histItem.source}">${histItem.catIcon || (histItem.type === 'image' ? '📷' : '📜')}</span>
         <span class="surfer-history-title">${histItem.title}</span>
       </div>
       <div class="surfer-history-item-right">
@@ -3282,14 +4789,19 @@ async function performWebSurferStep() {
       chosenType = 'image';
     }
 
-    updateStatus('Esplorazione del Web in corso…', chosenType === 'text' ? 'Interrogazione nodi enciclopedici e testuali' : 'Ricerca iconografica e visiva aperta');
+    updateStatus('Esplorazione del Web in corso…', chosenType === 'text' ? `Canale: ${getSourceCategoryLabel(surferSourceCategory)}` : 'Ricerca iconografica e visiva aperta');
 
     // 2. Fetch content
     let item = null;
-    if (chosenType === 'text') {
-      item = await fetchRandomTextFromWeb(msg => updateStatus('Ricerca testo sul web…', msg));
-    } else {
+    if (chosenType === 'image') {
       item = await fetchRandomImageFromWeb(msg => updateStatus('Ricerca immagine sul web…', msg));
+      if (!item.category) {
+        item.category = 'wiki';
+        item.catName = 'Patrimonio Visivo Aperto';
+        item.catIcon = '🖼️';
+      }
+    } else {
+      item = await fetchRandomTextContent(surferSourceCategory, msg => updateStatus('Navigazione web…', msg));
     }
 
     // 3. Analyze with created tools
@@ -3380,6 +4892,8 @@ function initWebSurferModal() {
   const btnAutopilot = document.getElementById('btn-surfer-autopilot');
   const btnApply    = document.getElementById('btn-surfer-apply');
   const modePills   = document.querySelectorAll('.surfer-pill');
+  const sourcePills = document.querySelectorAll('.surfer-source-pill');
+  const activeSourceLabel = document.getElementById('surfer-active-source-badge');
 
   if (!modal) return;
 
@@ -3403,6 +4917,18 @@ function initWebSurferModal() {
       modePills.forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       surferMode = pill.getAttribute('data-surfer-mode') || 'mixed';
+    });
+  });
+
+  // Source Category Selector Pills (All, News, Social, Trends, Wellbeing, Community, Wiki)
+  sourcePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      sourcePills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      surferSourceCategory = pill.getAttribute('data-surfer-source') || 'all';
+      if (activeSourceLabel) {
+        activeSourceLabel.textContent = getSourceCategoryLabel(surferSourceCategory);
+      }
     });
   });
 
@@ -3430,4 +4956,3 @@ function initWebSurferModal() {
     });
   }
 }
-

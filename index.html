@@ -93,6 +93,16 @@
           <span class="btn-text"><span class="desktop-only">Analizza </span>Immagine</span>
         </button>
 
+        <button id="btn-audio-analyze-toggle" class="btn-header btn-audio-analyze-header" title="Riconosci l'emozione da un file audio caricato">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span class="btn-text"><span class="desktop-only">Analizza </span>Audio</span>
+        </button>
+
         <button id="btn-web-surfer-toggle" class="btn-header btn-surfer-header" title="Avvia il navigatore casuale del web ed esplora testi o immagini">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -506,6 +516,159 @@
     </div>
   </div>
 
+  <!-- MODAL: ANALISI EMOZIONE DA AUDIO -->
+  <div class="modal-overlay" id="modal-audio-analyze">
+    <div class="modal-card modal-analyze-card modal-audio-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Analisi Emotiva dell'Audio</h2>
+          <p>Carica un file audio (voce, musica, paesaggio sonoro): l'IA riconoscerà l'emozione predominante tramite analisi acustica e multimodale.</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-audio-analyze" aria-label="Chiudi modale">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body analyze-modal-body">
+
+        <!-- Drop Zone -->
+        <div class="audio-dropzone" id="audio-dropzone">
+          <input type="file" id="audio-file-input" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm,.opus" style="display:none">
+          <div class="audio-dropzone-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+          </div>
+          <div class="audio-dropzone-text">Trascina un file audio qui</div>
+          <div class="audio-dropzone-sub">oppure seleziona o registra dal microfono</div>
+          <div class="audio-action-buttons">
+            <button class="btn-choose-file" id="btn-choose-audio-file" type="button">Scegli file audio</button>
+            <button class="btn-record-audio" id="btn-record-audio" type="button" title="Registra voce dal microfono">
+              <span class="record-dot"></span>
+              <span id="btn-record-text">Registra voce</span>
+            </button>
+          </div>
+          <div class="audio-dropzone-formats">MP3 · WAV · OGG · M4A · AAC · FLAC · WEBM (max 25 MB)</div>
+        </div>
+
+        <!-- Audio Preview & Waveform Section -->
+        <div class="audio-preview-section" id="audio-preview-section" style="display:none">
+          <div class="audio-card-player">
+            <div class="audio-info-header">
+              <div class="audio-title-group">
+                <span class="audio-track-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </span>
+                <div class="audio-filename" id="audio-filename">traccia.mp3</div>
+              </div>
+              <button class="btn-remove-audio" id="btn-remove-audio" type="button" title="Rimuovi traccia">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Waveform Canvas -->
+            <div class="waveform-container">
+              <canvas id="audio-waveform-canvas" width="600" height="70"></canvas>
+            </div>
+
+            <!-- Native Audio Player Controls -->
+            <audio id="audio-player-element" controls preload="metadata" class="custom-audio-native"></audio>
+
+            <!-- Metadata Pills -->
+            <div class="audio-meta-row" id="audio-meta-row">
+              <span class="audio-badge" id="audio-duration-badge">Durata: --:--</span>
+              <span class="audio-badge" id="audio-format-badge">Formato: audio</span>
+              <span class="audio-badge" id="audio-samplerate-badge">Campionamento: -- kHz</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <button id="btn-do-audio-analyze" class="btn-do-analyze btn-do-audio-analyze" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+          Riconosci emozione dall'audio
+        </button>
+
+        <!-- Status / Spinner -->
+        <div class="img-status" id="audio-status" style="display:none">
+          <div class="img-spinner"></div>
+          <span id="audio-status-text">Analisi spettroacustica in corso…</span>
+        </div>
+
+        <!-- Error Message -->
+        <div class="img-error" id="audio-error" style="display:none"></div>
+
+        <!-- Results Panel (hidden until analysis runs) -->
+        <div class="analyze-results" id="audio-analyze-results" style="display:none">
+
+          <!-- Detected Emotion Banner -->
+          <div class="analyze-detected-banner" id="audio-detected-banner">
+            <div class="analyze-detected-info">
+              <div class="analyze-detected-label">Emozione rilevata dall'audio</div>
+              <div class="analyze-detected-name" id="audio-detected-name">—</div>
+              <div class="analyze-detected-sub" id="audio-detected-sub">—</div>
+            </div>
+            <div class="analyze-confidence-ring" id="audio-confidence-ring">
+              <svg viewBox="0 0 44 44" class="ring-svg">
+                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                <circle id="audio-ring-progress" cx="22" cy="22" r="18" fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1"
+                  transform="rotate(-90 22 22)"/>
+              </svg>
+              <span id="audio-ring-pct">0%</span>
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="analyze-section-label">Profilo acustico ed espressivo</div>
+          <div class="img-ai-desc" id="audio-ai-desc"></div>
+
+          <!-- DSP Acoustic Metrics Badges -->
+          <div class="audio-dsp-grid" id="audio-dsp-grid">
+            <!-- Dynamically populated with RMS energy, spectral centroid, dynamics, tempo -->
+          </div>
+
+          <!-- Plutchik Score Bars -->
+          <div class="analyze-section-label" style="margin-top:14px">Vettore Plutchik decifrato</div>
+          <div class="analyze-bars" id="audio-analyze-bars">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Matching Dataset Emotion -->
+          <div class="analyze-section-label" style="margin-top:14px">Corrispondenza nel dataset</div>
+          <div class="analyze-match-card" id="audio-analyze-match-card">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Apply Button -->
+          <button id="btn-apply-audio-analyzed" class="btn-apply-analyzed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Applica questa emozione all'entità sintetica
+          </button>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: NAVIGATORE WEB RANDOMICO -->
   <div class="modal-overlay" id="modal-web-surfer">
     <div class="modal-card modal-analyze-card modal-surfer-card">
@@ -533,9 +696,28 @@
             <div class="surfer-mode-group">
               <span class="surfer-toolbar-label">Filtro stimolo:</span>
               <div class="surfer-pills">
-                <button class="surfer-pill active" data-surfer-mode="mixed">Casuale 50/50</button>
-                <button class="surfer-pill" data-surfer-mode="text">Solo Testo</button>
-                <button class="surfer-pill" data-surfer-mode="image">Solo Immagini</button>
+                <button class="surfer-pill active" data-surfer-mode="mixed">🎲 Casuale</button>
+                <button class="surfer-pill" data-surfer-mode="text">📜 Solo Testo</button>
+                <button class="surfer-pill" data-surfer-mode="image">🖼️ Solo Immagini</button>
+                <button class="surfer-pill" data-surfer-mode="audio">🎵 Solo Audio</button>
+                <button class="surfer-pill" data-surfer-mode="video">🎬 Solo Video</button>
+              </div>
+            </div>
+
+            <!-- Source Categories Selector -->
+            <div class="surfer-source-group">
+              <div class="surfer-source-header-row">
+                <span class="surfer-toolbar-label">Canali & Fonti Web:</span>
+                <span class="surfer-source-active-label" id="surfer-active-source-badge">Tutte le Fonti (360°)</span>
+              </div>
+              <div class="surfer-source-pills" id="surfer-source-pills">
+                <button class="surfer-source-pill active" data-surfer-source="all" title="Esplora a 360° tra notizie, social, tendenze e indicatori">🌐 Tutte le Fonti</button>
+                <button class="surfer-source-pill" data-surfer-source="news" title="Reuters, Associated Press, BBC News, The Guardian, ANSA">📰 Testate Autorevoli</button>
+                <button class="surfer-source-pill" data-surfer-source="social" title="Reddit, Bluesky, Mastodon, X">💬 Social Network</button>
+                <button class="surfer-source-pill" data-surfer-source="trends" title="Google Trends: argomenti caldi e picchi di ricerca mondiali">📈 Google Trends</button>
+                <button class="surfer-source-pill" data-surfer-source="wellbeing" title="OMS, Gallup, World Happiness Report, OCSE Better Life">🌿 Benessere Umano</button>
+                <button class="surfer-source-pill" data-surfer-source="community" title="Hacker News, r/science, Salute Mentale, Lavoro, Relazioni">🔬 Comunità Tematiche</button>
+                <button class="surfer-source-pill" data-surfer-source="wiki" title="Wikipedia IT/EN e Wikimedia Commons">📚 Enciclopedia & Arte</button>
               </div>
             </div>
 
@@ -595,20 +777,29 @@
             </div>
 
             <div class="surfer-content-view" id="surfer-content-view" style="display:none">
-              <!-- Header with Source Badge & External Link -->
+              <!-- Header with Category & Source Badge & External Link -->
               <div class="surfer-content-header">
-                <div class="surfer-source-pill" id="surfer-source-pill">
-                  <span id="surfer-source-icon">🌐</span>
-                  <span id="surfer-source-name">Wikipedia</span>
+                <div class="surfer-source-badges-wrap">
+                  <div class="surfer-category-badge" id="surfer-category-badge">
+                    <span id="surfer-cat-icon">🌐</span>
+                    <span id="surfer-cat-name">Enciclopedia</span>
+                  </div>
+                  <div class="surfer-source-pill" id="surfer-source-pill">
+                    <span id="surfer-source-icon">🌐</span>
+                    <span id="surfer-source-name">Wikipedia</span>
+                  </div>
                 </div>
-                <a id="surfer-external-link" class="surfer-external-link" href="#" target="_blank" rel="noopener noreferrer">
-                  <span>Vedi sul web</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                </a>
+                <div class="surfer-header-actions">
+                  <span class="surfer-meta-info" id="surfer-meta-info"></span>
+                  <a id="surfer-external-link" class="surfer-external-link" href="#" target="_blank" rel="noopener noreferrer">
+                    <span>Vedi sul web</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </a>
+                </div>
               </div>
 
               <!-- Title & Culture Context -->
@@ -625,6 +816,29 @@
                 <div class="surfer-image-wrapper">
                   <img id="surfer-image-el" class="surfer-image-el" src="" alt="Elemento visivo scoperto">
                 </div>
+              </div>
+
+              <!-- Audio Display (for audio discoveries) -->
+              <div class="surfer-audio-box" id="surfer-audio-box" style="display:none">
+                <canvas class="surfer-audio-waveform" id="surfer-audio-waveform" width="500" height="70"></canvas>
+                <audio id="surfer-audio-el" controls class="surfer-audio-player" preload="none"></audio>
+                <div class="surfer-audio-meta" id="surfer-audio-meta"></div>
+              </div>
+
+              <!-- Video Display (for video discoveries) -->
+              <div class="surfer-video-box" id="surfer-video-box" style="display:none">
+                <div class="surfer-video-wrapper">
+                  <iframe id="surfer-video-iframe" class="surfer-video-iframe" src="" frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen style="display:none"></iframe>
+                  <div class="surfer-video-thumb-wrap" id="surfer-video-thumb-wrap">
+                    <img id="surfer-video-thumb" class="surfer-video-thumb" src="" alt="">
+                    <button class="surfer-video-play-btn" id="surfer-video-play-btn" title="Riproduci su YouTube">
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="surfer-video-meta" id="surfer-video-meta"></div>
               </div>
 
               <!-- Emotion Analysis Output (using created tools) -->
