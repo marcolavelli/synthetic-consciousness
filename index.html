@@ -93,6 +93,14 @@
           <span class="btn-text"><span class="desktop-only">Analizza </span>Immagine</span>
         </button>
 
+        <button id="btn-video-analyze-toggle" class="btn-header btn-video-analyze-header" title="Riconosci l'emozione da un video caricato">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          <span class="btn-text"><span class="desktop-only">Analizza </span>Video</span>
+        </button>
+
         <button id="btn-audio-analyze-toggle" class="btn-header btn-audio-analyze-header" title="Riconosci l'emozione da un file audio caricato">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -512,6 +520,145 @@
           </button>
 
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ANALISI EMOZIONE DA VIDEO -->
+  <div class="modal-overlay" id="modal-video-analyze">
+    <div class="modal-card modal-analyze-card modal-video-card">
+      <div class="bottom-sheet-grab" aria-hidden="true"></div>
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2>Analisi Emotiva del Video</h2>
+          <p>Carica un video: l'IA campionerà i frame chiave e riconoscerà l'emozione predominante tramite visione artificiale multimodale.</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-video-analyze" aria-label="Chiudi modale">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body analyze-modal-body">
+
+        <!-- Drop Zone -->
+        <div class="video-dropzone" id="video-dropzone">
+          <input type="file" id="video-file-input" accept="video/*,.mp4,.webm,.mov,.avi,.mkv,.ogg" style="display:none">
+          <div class="video-dropzone-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+          </div>
+          <div class="video-dropzone-text">Trascina un video qui</div>
+          <div class="video-dropzone-sub">oppure seleziona dal file system</div>
+          <button class="btn-choose-file" id="btn-choose-video-file" type="button">Scegli file video</button>
+          <div class="video-dropzone-formats">MP4 · WEBM · MOV · AVI · MKV (max 100 MB)</div>
+        </div>
+
+        <!-- Video Preview -->
+        <div class="video-preview-section" id="video-preview-section" style="display:none">
+          <div class="video-preview-wrapper">
+            <video id="video-player-element" controls preload="metadata" class="video-preview-player" muted playsinline></video>
+            <button class="btn-remove-img" id="btn-remove-video" title="Rimuovi video">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="video-meta-row" id="video-meta-row">
+            <span class="audio-badge" id="video-duration-badge">Durata: --:--</span>
+            <span class="audio-badge" id="video-format-badge">Formato: video</span>
+            <span class="audio-badge" id="video-frames-badge">Frame: --</span>
+          </div>
+          <!-- Frame Strip Preview -->
+          <div class="video-frames-strip" id="video-frames-strip" style="display:none">
+            <div class="video-frames-label">Frame campionati per l'analisi:</div>
+            <div class="video-frames-row" id="video-frames-row">
+              <!-- Frame thumbnails injected by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Frame Sampling Config -->
+        <div class="video-config-row" id="video-config-row" style="display:none">
+          <label class="video-config-label" for="video-frames-count">Frame da analizzare:</label>
+          <div class="video-frames-pills">
+            <button class="video-frames-pill" data-frames="4">4 frame</button>
+            <button class="video-frames-pill active" data-frames="8">8 frame</button>
+            <button class="video-frames-pill" data-frames="12">12 frame</button>
+          </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <button id="btn-do-video-analyze" class="btn-do-analyze btn-do-video-analyze" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          Riconosci emozione dal video
+        </button>
+
+        <!-- Status / Spinner -->
+        <div class="img-status" id="video-status" style="display:none">
+          <div class="img-spinner"></div>
+          <span id="video-status-text">Campionamento frame in corso…</span>
+        </div>
+
+        <!-- Error -->
+        <div class="img-error" id="video-error" style="display:none"></div>
+
+        <!-- Results Panel -->
+        <div class="analyze-results" id="video-analyze-results" style="display:none">
+
+          <!-- Detected Emotion Banner -->
+          <div class="analyze-detected-banner" id="video-detected-banner">
+            <div class="analyze-detected-info">
+              <div class="analyze-detected-label">Emozione rilevata dal video</div>
+              <div class="analyze-detected-name" id="video-detected-name">—</div>
+              <div class="analyze-detected-sub" id="video-detected-sub">—</div>
+            </div>
+            <div class="analyze-confidence-ring" id="video-confidence-ring">
+              <svg viewBox="0 0 44 44" class="ring-svg">
+                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                <circle id="video-ring-progress" cx="22" cy="22" r="18" fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1"
+                  transform="rotate(-90 22 22)"/>
+              </svg>
+              <span id="video-ring-pct">0%</span>
+            </div>
+          </div>
+
+          <!-- AI Description -->
+          <div class="analyze-section-label">Descrizione visiva dell'IA</div>
+          <div class="img-ai-desc" id="video-ai-desc"></div>
+
+          <!-- Frame Analysis Summary -->
+          <div class="analyze-section-label" style="margin-top:14px">Sintesi per frame analizzato</div>
+          <div class="video-frame-summary" id="video-frame-summary"></div>
+
+          <!-- Plutchik Bars -->
+          <div class="analyze-section-label" style="margin-top:14px">Vettore Plutchik rilevato</div>
+          <div class="analyze-bars" id="video-analyze-bars"></div>
+
+          <!-- Dataset Match -->
+          <div class="analyze-section-label" style="margin-top:14px">Corrispondenza nel dataset</div>
+          <div class="analyze-match-card" id="video-analyze-match-card"></div>
+
+          <!-- Apply Button -->
+          <button id="btn-apply-video-analyzed" class="btn-apply-analyzed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Applica questa emozione all'entità sintetica
+          </button>
+
+        </div>
+        <!-- canvas nascosto usato per catturare i frame -->
+        <canvas id="video-frame-canvas" style="display:none"></canvas>
       </div>
     </div>
   </div>

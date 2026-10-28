@@ -1480,6 +1480,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initAnalyzeModal();
   initImageAnalyzeModal();
   initAudioAnalyzeModal();
+  initVideoAnalyzeModal();
   initWebSurferModal();
   loadDataset();
 });
@@ -3473,6 +3474,215 @@ const SURFER_FALLBACK_IMAGES = [
 ];
 
 // ============================================================================
+/** Fallback di tracce audio con licenza libera da Wikimedia Commons con forte impronta emotiva */
+const SURFER_FALLBACK_AUDIO = [
+  {
+    type: 'audio',
+    title: 'La Primavera - Allegro (Antonio Vivaldi)',
+    subtitle: 'Musica Barocca • Vivacità, Luce e Gioia Rinascimentale',
+    source: 'Wikimedia Commons / Musopen',
+    icon: '🎻',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Wikimedia Commons Audio • Formato OGG',
+    url: 'https://commons.wikimedia.org/wiki/File:Antonio_Vivaldi_-_The_Four_Seasons_-_1._Spring_-_Allegro.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/3c/Antonio_Vivaldi_-_The_Four_Seasons_-_1._Spring_-_Allegro.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Gioia'
+  },
+  {
+    type: 'audio',
+    title: 'Sinfonia N. 5 in Do minore - Allegro con brio (L. van Beethoven)',
+    subtitle: 'Romanticismo Classico • Determinazione, Furia e Destino',
+    source: 'Wikimedia Commons / Skidmore College Orchestra',
+    icon: '⚡',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Wikimedia Commons Audio • Formato OGG',
+    url: 'https://commons.wikimedia.org/wiki/File:Beethoven_Symphony_5_c_minor_Op67_1_Allegro_con_brio.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Beethoven_Symphony_5_c_minor_Op67_1_Allegro_con_brio.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Rabbia'
+  },
+  {
+    type: 'audio',
+    title: 'Notturno Op. 9 N. 1 (Frédéric Chopin)',
+    subtitle: 'Pianoforte Romantico • Malinconia, Dolcezza e Nostalgia',
+    source: 'Wikimedia Commons / Luke Faulkner',
+    icon: '🎹',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Wikimedia Commons Audio • Formato OGG',
+    url: 'https://commons.wikimedia.org/wiki/File:Chopin_nocturne_op9_no1.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Chopin_nocturne_op9_no1.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Tristezza'
+  },
+  {
+    type: 'audio',
+    title: 'Canto Gregoriano: Kyrie Eleison',
+    subtitle: 'Polifonia Sacra Medievale • Contemplazione, Sacralità e Fiducia',
+    source: 'Wikimedia Commons',
+    icon: '🕊️',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Wikimedia Commons Audio • Registrazione Storica',
+    url: 'https://commons.wikimedia.org/wiki/File:Gregorian_Chant_Kyrie.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/32/Gregorian_Chant_Kyrie.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Fiducia'
+  },
+  {
+    type: 'audio',
+    title: 'Onde dell\'Oceano Pacifico al Tramonto (Solana Beach)',
+    subtitle: 'Paesaggio Sonoro Naturale • Serenità, Calma e Respiro Cosmico',
+    source: 'Wikimedia Commons / Nature Soundscapes',
+    icon: '🌊',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Field Recording Naturale',
+    url: 'https://commons.wikimedia.org/wiki/File:Waves_at_Solana_Beach.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Waves_at_Solana_Beach.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Serenità'
+  },
+  {
+    type: 'audio',
+    title: 'I Pianeti: Marte, il Portatore di Guerra (Gustav Holst)',
+    subtitle: 'Musica Orchestrale del XX Secolo • Tensione, Terrore e Allarme',
+    source: 'Wikimedia Commons / US Air Force Heritage Band',
+    icon: '🪐',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Holst Suite Orchestrale',
+    url: 'https://commons.wikimedia.org/wiki/File:Holst_-_Mars,_the_Bringer_of_War.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Holst_-_Mars%2C_the_Bringer_of_War.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Paura'
+  },
+  {
+    type: 'audio',
+    title: 'Clair de Lune (Claude Debussy)',
+    subtitle: 'Impressionismo Musicale • Meraviglia, Onirismo e Purezza',
+    source: 'Wikimedia Commons / Laurens Goedhart',
+    icon: '🌙',
+    category: 'wiki',
+    catName: 'Patrimonio Sonoro Aperto',
+    catIcon: '🎵',
+    meta: 'Suite Bergamasque',
+    url: 'https://commons.wikimedia.org/wiki/File:Clair_de_lune_(Claude_Debussy)_Suite_bergamasque.ogg',
+    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/2/29/Clair_de_lune_%28Claude_Debussy%29_Suite_bergamasque.ogg',
+    mimeType: 'audio/ogg',
+    fallbackEmotion: 'Meraviglia'
+  }
+];
+
+/** Fallback di video oEmbed / YouTube con forte impronta emotiva e culturale */
+const SURFER_FALLBACK_VIDEOS = [
+  {
+    type: 'video',
+    videoId: 'GRxofEmo3HA',
+    title: 'Aurora Boreale: La Danza Magnetica della Terra nello Spazio',
+    subtitle: 'BBC Earth • Meraviglia Cosmica e Scienza dell\'Atmosfera',
+    source: 'BBC Earth (YouTube)',
+    icon: '✨',
+    category: 'wiki',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'YouTube oEmbed / 4K Documentary',
+    url: 'https://www.youtube.com/watch?v=GRxofEmo3HA',
+    videoEmbedUrl: 'https://www.youtube.com/embed/GRxofEmo3HA',
+    thumbnailUrl: 'https://i.ytimg.com/vi/GRxofEmo3HA/hqdefault.jpg',
+    fallbackEmotion: 'Meraviglia'
+  },
+  {
+    type: 'video',
+    videoId: '_VB39Jo8mAQ',
+    title: 'Vivaldi: L\'Inverno - Largo e Allegro (Accademia Bizantina)',
+    subtitle: 'Concerto Barocco dal Vivo • Gioia, Estasi e Virtuosismo',
+    source: 'Accademia Bizantina (YouTube)',
+    icon: '🎻',
+    category: 'wiki',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'Performance Musicale dal Vivo',
+    url: 'https://www.youtube.com/watch?v=_VB39Jo8mAQ',
+    videoEmbedUrl: 'https://www.youtube.com/embed/_VB39Jo8mAQ',
+    thumbnailUrl: 'https://i.ytimg.com/vi/_VB39Jo8mAQ/hqdefault.jpg',
+    fallbackEmotion: 'Gioia'
+  },
+  {
+    type: 'video',
+    videoId: 'rEq1Z0bjdwc',
+    title: 'Beethoven: Sonata al Chiaro di Luna (Adagio sostenuto)',
+    subtitle: 'Esecuzione Pianistica • Melancolia, Solitudine e Quiete Profonda',
+    source: 'Rousseau Piano (YouTube)',
+    icon: '🎹',
+    category: 'wiki',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'Sonata Op. 27 n. 2',
+    url: 'https://www.youtube.com/watch?v=rEq1Z0bjdwc',
+    videoEmbedUrl: 'https://www.youtube.com/embed/rEq1Z0bjdwc',
+    thumbnailUrl: 'https://i.ytimg.com/vi/rEq1Z0bjdwc/hqdefault.jpg',
+    fallbackEmotion: 'Tristezza'
+  },
+  {
+    type: 'video',
+    videoId: 'bx1Bh8ZvH84',
+    title: 'Carl Sagan: Il Pale Blue Dot (Un Piccolo Punto Blu)',
+    subtitle: 'Cosmos • Prospettiva Esistenziale, Speranza e Umiltà dell\'Umanità',
+    source: 'The Carl Sagan Institute (YouTube)',
+    icon: '🌍',
+    category: 'community',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'Cosmos Filosofico',
+    url: 'https://www.youtube.com/watch?v=bx1Bh8ZvH84',
+    videoEmbedUrl: 'https://www.youtube.com/embed/bx1Bh8ZvH84',
+    thumbnailUrl: 'https://i.ytimg.com/vi/bx1Bh8ZvH84/hqdefault.jpg',
+    fallbackEmotion: 'Speranza'
+  },
+  {
+    type: 'video',
+    videoId: 'aqz-KE-bpKQ',
+    title: 'Big Buck Bunny: La Vendetta del Coniglio nella Foresta Incantata',
+    subtitle: 'Blender Foundation • Animazione Open Source, Umorismo e Risa',
+    source: 'Blender Open Movies (YouTube)',
+    icon: '🐰',
+    category: 'wiki',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'Creative Commons 3D Film',
+    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    videoEmbedUrl: 'https://www.youtube.com/embed/aqz-KE-bpKQ',
+    thumbnailUrl: 'https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg',
+    fallbackEmotion: 'Divertimento'
+  },
+  {
+    type: 'video',
+    videoId: 'udAL48P5NJU',
+    title: 'Hubble Extreme Deep Field: I Confini dell\'Universo Osservabile',
+    subtitle: 'NASA Space Telescope • Timore Reverenziale e Vertigine dell\'Infinito',
+    source: 'Hubble Space Telescope (YouTube)',
+    icon: '🔭',
+    category: 'wiki',
+    catName: 'Patrimonio Audiovisivo',
+    catIcon: '🎬',
+    meta: 'Astronomia e Astrofisica',
+    url: 'https://www.youtube.com/watch?v=udAL48P5NJU',
+    videoEmbedUrl: 'https://www.youtube.com/embed/udAL48P5NJU',
+    thumbnailUrl: 'https://i.ytimg.com/vi/udAL48P5NJU/hqdefault.jpg',
+    fallbackEmotion: 'Meraviglia'
+  }
+];
+
 // 13.1 DATASET E FONTI SPECIALISTICHE DEL NAVIGATORE WEB
 // ============================================================================
 
@@ -4392,7 +4602,87 @@ function webImageToBase64(imageUrl) {
  * - analyzeTextEmotion & findBestDatasetMatch for text
  * - callGeminiVision for image (with automatic fallback to text semantic analysis if Gemini quota/key is not set)
  */
+/**
+ * Fetch a random audio file from open public web sources (Wikimedia Commons Audio API or Curated Archive).
+ */
+async function fetchRandomAudioFromWeb(onStatus) {
+  if (onStatus) onStatus('Ricerca di tracce audio aperte su Wikimedia Commons...');
+
+  // Method 1: Random Audio file from Wikimedia Commons API
+  try {
+    const wmAudioUrl = 'https://commons.wikimedia.org/w/api.php?action=query&generator=random&grnnamespace=6&prop=imageinfo&iiprop=url|mime|size&format=json&origin=*';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5500);
+
+    const res = await fetch(wmAudioUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const pages = data.query?.pages || {};
+      for (const pId of Object.keys(pages)) {
+        const page = pages[pId];
+        const info = page.imageinfo?.[0];
+        if (info && info.mime && (info.mime.startsWith('audio/') || (info.url && info.url.match(/\.(ogg|flac|mp3|wav|webm)$/i)))) {
+          let cleanTitle = (page.title || '').replace(/^File:/i, '').replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+          return {
+            type: 'audio',
+            category: 'wiki',
+            catName: 'Patrimonio Sonoro Aperto',
+            catIcon: '🎵',
+            meta: `Wikimedia Commons Audio • ${info.mime || 'Audio OGG'}`,
+            title: cleanTitle || 'Frammento Acustico Aperto',
+            subtitle: 'Wikimedia Commons • Archivio Sonoro Globale',
+            source: 'Wikimedia Commons Audio',
+            icon: '🎵',
+            url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
+            audioUrl: info.url,
+            mimeType: info.mime || 'audio/ogg',
+            fallbackEmotion: 'Curiosità'
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Wikimedia Commons random audio query timed out or had no audio:', err.message);
+  }
+
+  // Method 2: Curated Masterpiece Audio with CORS-safe upload.wikimedia.org URLs
+  if (onStatus) onStatus('Accesso all\'archivio sonoro sinfonico e naturale...');
+  await new Promise(r => setTimeout(r, 100));
+  const chosen = SURFER_FALLBACK_AUDIO[Math.floor(Math.random() * SURFER_FALLBACK_AUDIO.length)];
+  return { ...chosen };
+}
+
+/**
+ * Fetch a random video item from open public web sources (YouTube oEmbed / curated archives).
+ */
+async function fetchRandomVideoFromWeb(onStatus) {
+  if (onStatus) onStatus('Consultazione archivio video e documentari aperti...');
+
+  const chosen = SURFER_FALLBACK_VIDEOS[Math.floor(Math.random() * SURFER_FALLBACK_VIDEOS.length)];
+  const item = { ...chosen };
+
+  // Attempt live oEmbed to get fresh title, author and official thumbnail
+  try {
+    if (onStatus) onStatus(`Interrogazione oEmbed per «${item.title.substring(0, 30)}...»`);
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${item.videoId}&format=json`;
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.title) item.title = data.title;
+      if (data.author_name) item.subtitle = `${data.author_name} • Video Documentario & Espressione`;
+      if (data.thumbnail_url) item.thumbnailUrl = data.thumbnail_url;
+    }
+  } catch (e) {
+    console.warn('YouTube oEmbed non raggiungibile, utilizzo metadati locali:', e.message);
+  }
+
+  return item;
+}
+
 async function analyzeWebSurferItem(item, onStatus) {
+  /* Web surfer emotion analyzer */
   if (item.type === 'text') {
     if (onStatus) onStatus('Analisi lessicale e vettoriale Plutchik del testo…');
     await new Promise(r => setTimeout(r, 80));
@@ -4515,6 +4805,137 @@ async function analyzeWebSurferItem(item, onStatus) {
  * Render the discovered item and its analysis in the Surfer modal,
  * and apply the resulting emotion to the 3D entity if enabled.
  */
+  if (item.type === 'audio') {
+    if (onStatus) onStatus('Download traccia audio e decodifica Web Audio API...');
+    let decodedBuffer = null;
+    let dspAnalysis = null;
+
+    try {
+      const audioRes = await fetch(item.audioUrl, { mode: 'cors', signal: AbortSignal.timeout(9000) });
+      if (audioRes.ok) {
+        const arrayBuf = await audioRes.arrayBuffer();
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtxClass) {
+          const tempCtx = new AudioCtxClass();
+          decodedBuffer = await tempCtx.decodeAudioData(arrayBuf);
+          if (onStatus) onStatus('Elaborazione psicoacustica DSP e spettrogramma...');
+          dspAnalysis = analyzeAudioLocally(decodedBuffer);
+          try { tempCtx.close(); } catch (_) {}
+        }
+      }
+    } catch (audioErr) {
+      console.warn("Impossibile decodificare direttamente l'audio con Web Audio API (CORS o codec):", audioErr);
+    }
+
+    if (dspAnalysis) {
+      const dominant = Object.entries(dspAnalysis.plutchik_weights).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'gioia';
+      const pk = PLUTCHIK_PRIMARIES[dominant] || PLUTCHIK_PRIMARIES.gioia;
+      const matched = emotionsDataset.find(e => e.plutchik?.primary === dominant && (e.termine_originale.toLowerCase() === dspAnalysis.emotion.toLowerCase())) ||
+                      emotionsDataset.find(e => e.plutchik?.primary === dominant) || emotionsDataset[0];
+
+      return {
+        type: 'audio',
+        analysis: dspAnalysis,
+        audioBuffer: decodedBuffer,
+        dsp: dspAnalysis.dsp,
+        matchedEmotion: matched,
+        dominant,
+        confidence: dspAnalysis.confidence || 0.82,
+        weights: dspAnalysis.plutchik_weights,
+        valenza: dspAnalysis.valenza,
+        arousal: dspAnalysis.arousal,
+        aiNote: `Scansione acustica DSP completata: ${dspAnalysis.description}`
+      };
+    }
+
+    // Resilient fallback: semantic text analysis on audio title, genre and fallback emotion
+    if (onStatus) onStatus('Analisi semantica e timbrica del titolo musicale...');
+    const semanticText = `${item.title} ${item.subtitle || ''} ${item.fallbackEmotion || ''}`;
+    const textAnalysis = analyzeTextEmotion(semanticText) || {
+      dominant: 'fiducia',
+      confidence: 0.74,
+      vector: { fiducia: 0.45, gioia: 0.35, anticipazione: 0.20 }
+    };
+    const matchedEmotion = findBestDatasetMatch(textAnalysis) || emotionsDataset[0];
+    return {
+      type: 'audio',
+      analysis: null,
+      audioBuffer: null,
+      matchedEmotion,
+      dominant: textAnalysis.dominant,
+      confidence: textAnalysis.confidence || 0.75,
+      weights: textAnalysis.vector,
+      aiNote: `Interpretazione psicoacustica della traccia: «${item.title}». Tonalità dominante: ${matchedEmotion.termine_originale}.`
+    };
+  }
+
+  if (item.type === 'video') {
+    if (onStatus) onStatus('Acquisizione fotogramma di copertina del video...');
+    let base64Data = null;
+    let mimeType = 'image/jpeg';
+
+    if (item.thumbnailUrl) {
+      try {
+        const encoded = await webImageToBase64(item.thumbnailUrl);
+        base64Data = encoded.base64;
+        mimeType = encoded.mimeType;
+      } catch (thumbErr) {
+        console.warn("Impossibile convertire miniatura video in base64:", thumbErr);
+      }
+    }
+
+    // If Gemini Vision available, analyze thumbnail
+    if (geminiApiKey && base64Data) {
+      try {
+        if (onStatus) onStatus('Analisi del fotogramma video con Google Gemini Vision...');
+        const geminiRes = await callGeminiVision(geminiApiKey, base64Data, mimeType, onStatus);
+        const weights = geminiRes.plutchik_weights || {};
+        let dominant = 'gioia', maxW = -1;
+        for (const [k, w] of Object.entries(weights)) {
+          if (w > maxW) { maxW = w; dominant = k; }
+        }
+        let datasetMatch = emotionsDataset.find(e =>
+          e.plutchik?.primary === dominant &&
+          (e.termine_originale.toLowerCase() === (geminiRes.emotion || '').toLowerCase())
+        ) || emotionsDataset.find(e => e.plutchik?.primary === dominant);
+
+        return {
+          type: 'video',
+          analysis: geminiRes,
+          matchedEmotion: datasetMatch,
+          dominant,
+          confidence: geminiRes.confidence || 0.86,
+          weights,
+          valenza: geminiRes.valenza,
+          arousal: geminiRes.arousal,
+          aiNote: geminiRes.description || `L'IA visiva riconosce nel filmato: ${geminiRes.emotion || dominant}.`
+        };
+      } catch (geminiErr) {
+        console.warn("Gemini Vision per video non disponibile, passo all'analisi semantica:", geminiErr);
+      }
+    }
+
+    // Resilient fallback: semantic text analysis of video title and description
+    if (onStatus) onStatus('Analisi tematica e cinematografica del video...');
+    const semanticText = `${item.title} ${item.subtitle || ''} ${item.fallbackEmotion || ''}`;
+    const textAnalysis = analyzeTextEmotion(semanticText) || {
+      dominant: 'sorpresa',
+      confidence: 0.76,
+      vector: { sorpresa: 0.50, gioia: 0.30, anticipazione: 0.20 }
+    };
+    const matchedEmotion = findBestDatasetMatch(textAnalysis) || emotionsDataset[0];
+    return {
+      type: 'video',
+      analysis: null,
+      matchedEmotion,
+      dominant: textAnalysis.dominant,
+      confidence: textAnalysis.confidence || 0.78,
+      weights: textAnalysis.vector,
+      aiNote: `Analisi audiovisiva di «${item.title}»: evocazione di ${matchedEmotion.termine_originale}.`
+    };
+  }
+}
+
 function renderSurferDiscovery(item, analysisData) {
   const emptyState    = document.getElementById('surfer-empty-state');
   const contentView   = document.getElementById('surfer-content-view');
@@ -4531,6 +4952,16 @@ function renderSurferDiscovery(item, analysisData) {
   const textContent   = document.getElementById('surfer-text-content');
   const imageBox      = document.getElementById('surfer-image-box');
   const imageEl       = document.getElementById('surfer-image-el');
+  const audioBox      = document.getElementById('surfer-audio-box');
+  const audioEl       = document.getElementById('surfer-audio-el');
+  const audioWaveform = document.getElementById('surfer-audio-waveform');
+  const audioMeta     = document.getElementById('surfer-audio-meta');
+  const videoBox      = document.getElementById('surfer-video-box');
+  const videoIframe   = document.getElementById('surfer-video-iframe');
+  const videoThumbWrap = document.getElementById('surfer-video-thumb-wrap');
+  const videoThumb    = document.getElementById('surfer-video-thumb');
+  const videoPlayBtn  = document.getElementById('surfer-video-play-btn');
+  const videoMeta     = document.getElementById('surfer-video-meta');
   const banner        = document.getElementById('surfer-detected-banner');
   const detectedName  = document.getElementById('surfer-detected-name');
   const detectedSub   = document.getElementById('surfer-detected-sub');
@@ -4563,17 +4994,68 @@ function renderSurferDiscovery(item, analysisData) {
   if (itemTitle) itemTitle.textContent = item.title;
   if (itemSubtitle) itemSubtitle.textContent = item.subtitle || '';
 
-  // Content display
+  // Content display (Text, Image, Audio, Video)
+  if (textBox) textBox.style.display = item.type === 'text' ? 'block' : 'none';
+  if (textContent && item.type === 'text') textContent.textContent = item.text;
+
+  if (imageBox) imageBox.style.display = item.type === 'image' ? 'flex' : 'none';
+  if (imageEl && item.type === 'image') {
+    imageEl.src = item.imageUrl;
+    imageEl.alt = item.title;
+  }
+
+  if (audioBox) audioBox.style.display = item.type === 'audio' ? 'flex' : 'none';
+  if (item.type === 'audio') {
+    if (audioEl) {
+      audioEl.src = item.audioUrl || '';
+      audioEl.load();
+    }
+    if (audioMeta) {
+      audioMeta.innerHTML = `<span>Formato: ${item.mimeType || 'Audio Web'}</span><span>•</span><span>DSP: ${analysisData.dsp ? 'Analisi acustica completata' : 'Elaborazione spettrale'}</span>`;
+    }
+    if (audioWaveform && analysisData.audioBuffer) {
+      drawAudioWaveform(audioWaveform, analysisData.audioBuffer, 0, '#06b6d4');
+    }
+  }
+
+  if (videoBox) videoBox.style.display = item.type === 'video' ? 'flex' : 'none';
+  if (item.type === 'video') {
+    if (videoThumbWrap) videoThumbWrap.style.display = 'flex';
+    if (videoIframe) {
+      videoIframe.style.display = 'none';
+      videoIframe.src = '';
+    }
+    if (videoThumb) {
+      videoThumb.src = item.thumbnailUrl || '';
+      videoThumb.alt = item.title;
+    }
+    if (videoMeta) {
+      videoMeta.innerHTML = `<span>Sorgente: ${item.source || 'Video'}</span><span>•</span><span>Riconoscimento: ${analysisData.type === 'video' && analysisData.analysis ? 'Gemini Vision / Traccia Visiva' : 'Iconografico & Semantico'}</span>`;
+    }
+    if (videoPlayBtn && videoIframe && videoThumbWrap) {
+      videoPlayBtn.onclick = () => {
+        if (item.videoEmbedUrl) {
+          videoIframe.src = item.videoEmbedUrl + (item.videoEmbedUrl.includes('?') ? '&' : '?') + 'autoplay=1';
+          videoIframe.style.display = 'block';
+          videoThumbWrap.style.display = 'none';
+        } else if (item.url) {
+          window.open(item.url, '_blank');
+        }
+      };
+    }
+  }
+  /* END_VIDEO */
+  if (false) {
   if (item.type === 'text') {
-    if (textBox) textBox.style.display = 'block';
-    if (textContent) textContent.textContent = item.text;
-    if (imageBox) imageBox.style.display = 'none';
+
+
+
   } else {
-    if (textBox) textBox.style.display = 'none';
-    if (imageBox) imageBox.style.display = 'flex';
-    if (imageEl) {
-      imageEl.src = item.imageUrl;
-      imageEl.alt = item.title;
+
+
+
+
+
     }
   }
 
@@ -4604,7 +5086,8 @@ function renderSurferDiscovery(item, analysisData) {
     detectedName.style.color = pk.color;
   }
   if (detectedSub) {
-    detectedSub.textContent = `Famiglia: ${pk.it.toUpperCase()} • Risonanza Plutchik: ${pct}% • ${item.type === 'text' ? 'Scansione Testuale' : 'Visione Artificiale'}`;
+    const modeLabel = item.type === 'text' ? 'Scansione Testuale' : item.type === 'image' ? 'Visione Artificiale' : item.type === 'audio' ? 'Analisi Psicoacustica DSP' : 'Riconoscimento Audiovisivo';
+    detectedSub.textContent = `Famiglia: ${pk.it.toUpperCase()} • Risonanza Plutchik: ${pct}% • ${modeLabel}`;
   }
 
   // AI Description / Note
@@ -4707,7 +5190,7 @@ function renderSurferDiscovery(item, analysisData) {
     title: item.title,
     source: item.source,
     category: item.category || 'wiki',
-    catIcon: item.catIcon || (item.type === 'image' ? '📷' : '📜'),
+    catIcon: item.catIcon || (item.type === 'image' ? '🖼️' : item.type === 'audio' ? '🎵' : item.type === 'video' ? '🎬' : '📜'),
     emotionName: emotionObjToApply.termine_originale,
     emotionColor: pk.color,
     emotionObj: emotionObjToApply,
@@ -4735,7 +5218,7 @@ function recordSurferHistory(entry) {
     row.title = `Fai clic per rievocare: ${histItem.emotionName} (${histItem.source})`;
     row.innerHTML = `
       <div class="surfer-history-item-left">
-        <span class="surfer-history-type-icon" title="${histItem.source}">${histItem.catIcon || (histItem.type === 'image' ? '📷' : '📜')}</span>
+        <span class="surfer-history-type-icon" title="${histItem.source}">${histItem.catIcon || (histItem.type === 'image' ? '🖼️' : histItem.type === 'audio' ? '🎵' : histItem.type === 'video' ? '🎬' : '📜')}</span>
         <span class="surfer-history-title">${histItem.title}</span>
       </div>
       <div class="surfer-history-item-right">
@@ -4784,12 +5267,24 @@ async function performWebSurferStep() {
     // 1. Determine type
     let chosenType = 'text';
     if (surferMode === 'mixed') {
-      chosenType = Math.random() < 0.5 ? 'text' : 'image';
+      const rnd = Math.random();
+      if (rnd < 0.35) chosenType = 'text';
+      else if (rnd < 0.65) chosenType = 'image';
+      else if (rnd < 0.85) chosenType = 'audio';
+      else chosenType = 'video';
     } else if (surferMode === 'image') {
       chosenType = 'image';
+    } else if (surferMode === 'audio') {
+      chosenType = 'audio';
+    } else if (surferMode === 'video') {
+      chosenType = 'video';
     }
 
-    updateStatus('Esplorazione del Web in corso…', chosenType === 'text' ? `Canale: ${getSourceCategoryLabel(surferSourceCategory)}` : 'Ricerca iconografica e visiva aperta');
+    const typeDesc = chosenType === 'text' ? `Canale: ${getSourceCategoryLabel(surferSourceCategory)}` :
+                     chosenType === 'image' ? 'Ricerca iconografica e visiva aperta' :
+                     chosenType === 'audio' ? 'Archivio sonoro e paesaggi acustici' :
+                     'Documentari e filmati audiovisivi';
+    updateStatus('Esplorazione del Web in corso…', typeDesc);
 
     // 2. Fetch content
     let item = null;
@@ -4801,11 +5296,31 @@ async function performWebSurferStep() {
         item.catIcon = '🖼️';
       }
     } else {
-      item = await fetchRandomTextContent(surferSourceCategory, msg => updateStatus('Navigazione web…', msg));
+      if (chosenType === 'audio') {
+      item = await fetchRandomAudioFromWeb(msg => updateStatus('Ricerca audio sul web…', msg));
+      if (!item.category) {
+        item.category = 'wiki';
+        item.catName = 'Patrimonio Sonoro Aperto';
+        item.catIcon = '🎵';
+      }
+    } else if (chosenType === 'video') {
+      item = await fetchRandomVideoFromWeb(msg => updateStatus('Ricerca video sul web…', msg));
+      if (!item.category) {
+        item.category = 'wiki';
+        item.catName = 'Patrimonio Audiovisivo';
+        item.catIcon = '🎬';
+      }
+    } else {
+        item = await fetchRandomTextContent(surferSourceCategory, msg => updateStatus('Navigazione web…', msg));
+      }
     }
 
     // 3. Analyze with created tools
-    updateStatus('Analisi emotiva in corso…', item.type === 'text' ? 'Decodifica lessicale e vettoriale Plutchik' : 'Elaborazione visione artificiale');
+    const analysisDesc = item.type === 'text' ? 'Decodifica lessicale e vettoriale Plutchik' :
+                         item.type === 'image' ? 'Elaborazione visione artificiale' :
+                         item.type === 'audio' ? 'Decodifica Web Audio DSP e spettrogramma' :
+                         'Riconoscimento fotogramma e metadati video';
+    updateStatus('Analisi emotiva in corso…', analysisDesc);
     const analysisData = await analyzeWebSurferItem(item, msg => updateStatus('Analisi emotiva in corso…', msg));
 
     // 4. Render & Morph
@@ -4955,4 +5470,670 @@ function initWebSurferModal() {
       }
     });
   }
+}
+
+// ============================================================================
+// 12.7. VIDEO EMOTION ANALYSIS (Gemini Vision multiframe + Fallback Locale)
+// ============================================================================
+
+/** Last video-analysis result — used when "Apply" button is pressed */
+let lastVideoAnalysisResult = null;
+
+/** Number of frames to sample from the video */
+let videoFrameCount = 8;
+
+/**
+ * Extract N evenly-spaced JPEG frames from an HTMLVideoElement and
+ * calculate optical & visual metrics on each frame.
+ * @param {HTMLVideoElement} videoEl
+ * @param {HTMLCanvasElement} canvas  Off-screen canvas for rendering
+ * @param {number} n  Number of frames to extract
+ * @param {Function} [onProgress]  Called with (currentFrame, totalFrames)
+ * @returns {Promise<Array<{base64: string, mimeType: string, time: number, metrics: Object}>>}
+ */
+async function extractVideoFrames(videoEl, canvas, n, onProgress) {
+  const duration = videoEl.duration;
+  if (!duration || !isFinite(duration)) {
+    throw new Error('Impossibile determinare la durata del video.');
+  }
+
+  const frames = [];
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  // Use a compact frame size to stay within API limits and keep processing fast
+  const TARGET_W = 512;
+  const scale = TARGET_W / (videoEl.videoWidth || 640);
+  canvas.width = TARGET_W;
+  canvas.height = Math.round((videoEl.videoHeight || 360) * scale);
+
+  let prevYData = null;
+
+  for (let i = 0; i < n; i++) {
+    // Space frames evenly, excluding the very first and last second
+    const safeStart = Math.min(0.5, duration * 0.05);
+    const safeEnd   = Math.max(duration - 0.5, duration * 0.95);
+    const t = n === 1
+      ? duration / 2
+      : safeStart + (safeEnd - safeStart) * (i / (n - 1));
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`Timeout caricamento frame ${i + 1}`)), 8000);
+      videoEl.onseeked = () => { clearTimeout(timeout); resolve(); };
+      videoEl.currentTime = t;
+    });
+
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    const base64 = dataUrl.split(',')[1];
+
+    // Extract visual metrics for local dynamic analysis
+    let metrics = null;
+    try {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      let rSum = 0, gSum = 0, bSum = 0, satSum = 0;
+      const step = Math.max(1, Math.floor(data.length / (TARGET_W * 12)));
+      let samples = 0;
+      let motionSum = 0;
+      const yData = new Uint8Array(Math.floor(data.length / (4 * step)));
+      let yIdx = 0;
+
+      for (let p = 0; p < data.length; p += step * 4) {
+        const r = data[p], g = data[p + 1], b = data[p + 2];
+        rSum += r; gSum += g; bSum += b;
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        satSum += (maxC - minC) / 255;
+        const y = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        yData[yIdx] = y;
+        if (prevYData && yIdx < prevYData.length) {
+          motionSum += Math.abs(y - prevYData[yIdx]);
+        }
+        yIdx++;
+        samples++;
+      }
+
+      const avgR = rSum / (samples || 1);
+      const avgG = gSum / (samples || 1);
+      const avgB = bSum / (samples || 1);
+      const brightness = (0.299 * avgR + 0.587 * avgG + 0.114 * avgB) / 255;
+      const warmth = (avgR - avgB) / 255;
+      const saturation = satSum / (samples || 1);
+      const motion = prevYData ? (motionSum / (samples || 1)) / 255 : 0;
+      prevYData = yData;
+
+      metrics = { brightness, warmth, saturation, motion, avgR, avgG, avgB };
+    } catch (metricErr) {
+      console.warn("Could not compute pixel metrics for frame:", metricErr);
+      metrics = { brightness: 0.5, warmth: 0, saturation: 0.4, motion: 0.08 };
+    }
+
+    frames.push({ base64, mimeType: 'image/jpeg', time: t, metrics });
+
+    if (onProgress) onProgress(i + 1, n);
+  }
+
+  return frames;
 }
+
+/**
+ * Local heuristic engine: evaluates color psychology, contrast, and inter-frame motion.
+ * Maps visual and narrative dynamics directly to Plutchik's 8 primary dimensions.
+ * @param {Array<{base64: string, time: number, metrics: Object}>} frames
+ * @returns {Object} Result object compatible with renderVideoAnalysisResults
+ */
+function analyzeVideoLocally(frames) {
+  let avgBrightness = 0, avgWarmth = 0, avgSaturation = 0, avgMotion = 0;
+  const frameEmotions = [];
+
+  frames.forEach((f, idx) => {
+    const m = f.metrics || { brightness: 0.5, warmth: 0, saturation: 0.4, motion: 0.08 };
+    avgBrightness += m.brightness;
+    avgWarmth += m.warmth;
+    avgSaturation += m.saturation;
+    avgMotion += m.motion;
+
+    // Per-frame heuristic emotion classification
+    let frameLabel = "Equilibrio";
+    if (m.motion > 0.14) {
+      frameLabel = m.warmth > 0.06 ? "Tensione Dinamica" : "Allerta / Sorpresa";
+    } else if (m.brightness > 0.62) {
+      frameLabel = m.warmth > 0.02 ? "Serenità Luminosa" : "Stupore Candido";
+    } else if (m.brightness < 0.32) {
+      frameLabel = m.warmth < -0.04 ? "Malinconia Notturna" : "Ombra Sospesa";
+    } else if (m.saturation > 0.45) {
+      frameLabel = "Carica Espressiva";
+    } else {
+      frameLabel = "Calma Riflessiva";
+    }
+    frameEmotions.push(frameLabel);
+  });
+
+  const count = frames.length || 1;
+  avgBrightness /= count;
+  avgWarmth /= count;
+  avgSaturation /= count;
+  avgMotion /= count;
+
+  // Plutchik dimension weights synthesized from temporal visual heuristics
+  const wGioia = Math.max(0.06, avgBrightness * 0.45 + Math.max(0, avgWarmth) * 0.35 + avgSaturation * 0.2);
+  const wTristezza = Math.max(0.06, (1 - avgBrightness) * 0.45 + Math.max(0, -avgWarmth) * 0.35 + (1 - Math.min(1, avgMotion * 3)) * 0.2);
+  const wRabbia = Math.max(0.06, Math.max(0, avgWarmth) * 0.4 + Math.min(1, avgMotion * 2.5) * 0.4 + avgSaturation * 0.2);
+  const wPaura = Math.max(0.06, (1 - avgBrightness) * 0.35 + Math.min(1, avgMotion * 2.5) * 0.45 + Math.max(0, -avgWarmth) * 0.2);
+  const wSorpresa = Math.max(0.06, avgBrightness * 0.35 + Math.min(1, avgMotion * 2.8) * 0.4 + avgSaturation * 0.25);
+  const wFiducia = Math.max(0.06, (1 - Math.min(1, avgMotion * 2.5)) * 0.45 + (1 - Math.abs(avgWarmth)) * 0.35 + avgBrightness * 0.2);
+  const wDisgusto = Math.max(0.06, (1 - avgBrightness) * 0.3 + avgSaturation * 0.35 + Math.max(0, -avgWarmth) * 0.35);
+  const wAnticipazione = Math.max(0.06, Math.min(1, avgMotion * 2.2) * 0.35 + avgWarmth * 0.3 + avgBrightness * 0.35);
+
+  const rawWeights = {
+    gioia: wGioia,
+    tristezza: wTristezza,
+    rabbia: wRabbia,
+    paura: wPaura,
+    sorpresa: wSorpresa,
+    fiducia: wFiducia,
+    disgusto: wDisgusto,
+    anticipazione: wAnticipazione
+  };
+
+  let sum = 0;
+  for (const k in rawWeights) sum += rawWeights[k];
+  const plutchik_weights = {};
+  for (const k in rawWeights) plutchik_weights[k] = +(rawWeights[k] / sum).toFixed(3);
+
+  let dominant = "gioia", maxW = -1;
+  for (const [k, w] of Object.entries(plutchik_weights)) {
+    if (w > maxW) { maxW = w; dominant = k; }
+  }
+
+  const pk = PLUTCHIK_PRIMARIES[dominant] || PLUTCHIK_PRIMARIES.gioia;
+  const valenza = (dominant === 'gioia' || dominant === 'fiducia') ? 'positiva'
+                : (dominant === 'sorpresa' || dominant === 'anticipazione') ? 'neutra'
+                : 'negativa';
+  const arousal = avgMotion > 0.12 ? 'alto' : avgMotion > 0.05 ? 'medio' : 'basso';
+
+  const desc = `Analisi iconografica e dinamica locale: ${count} fotogrammi temporali esaminati, gradiente cromatico ${avgWarmth > 0 ? 'caldo ed estroflesso' : 'freddo e introspettivo'}, luminosità media ${(avgBrightness * 100).toFixed(0)}%, flusso di movimento ${arousal}.`;
+
+  return {
+    emotion: pk.it,
+    confidence: +(0.72 + maxW * 0.22).toFixed(2),
+    description: desc,
+    frame_emotions: frameEmotions,
+    plutchik_weights,
+    valenza,
+    arousal
+  };
+}
+
+/**
+ * Call Gemini Vision API with multiple frames from a video.
+ * Each frame is sent as a separate inline_data part.
+ * @param {string} apiKey
+ * @param {Array<{base64: string, mimeType: string, time: number}>} frames
+ * @param {Function} [onStatus]
+ * @returns {Promise<Object>}  Parsed JSON result
+ */
+async function callGeminiVideo(apiKey, frames, onStatus) {
+  const frameDescriptions = frames.map((f, i) =>
+    `Frame ${i + 1} (al secondo ${f.time.toFixed(1)})`
+  ).join(', ');
+
+  const PROMPT = `Sei un esperto di psicologia delle emozioni specializzato nella ruota di Plutchik e nell'analisi cinematografica dell'espressione emotiva.
+
+Ti vengono forniti ${frames.length} frame estratti da un video: ${frameDescriptions}.
+
+Analizza attentamente ogni frame (espressioni facciali, linguaggio del corpo, colori, contesto, simbolismo, dinamica narrativa tra i frame) e identifica l'emozione umana predominante che emerge dall'insieme del video.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido (senza markdown, senza testo aggiuntivo) che rispetta questo schema:
+{
+  "emotion": "<nome dell'emozione predominante in italiano>",
+  "confidence": <numero da 0 a 1>,
+  "description": "<frase in italiano che sintetizza l'emozione emergente dall'intero video>",
+  "frame_emotions": [<per ogni frame: stringa con emozione breve, es. "Gioia", "Tristezza", "Paura">],
+  "plutchik_weights": {
+    "gioia": <0-1>,
+    "fiducia": <0-1>,
+    "paura": <0-1>,
+    "sorpresa": <0-1>,
+    "tristezza": <0-1>,
+    "disgusto": <0-1>,
+    "rabbia": <0-1>,
+    "anticipazione": <0-1>
+  },
+  "valenza": "<'positiva' | 'negativa' | 'neutra'>",
+  "arousal": "<'alto' | 'medio' | 'basso'>"
+}
+I valori di plutchik_weights devono sommare a circa 1.0.
+frame_emotions deve avere esattamente ${frames.length} elementi.`.trim();
+
+  const CANDIDATE_MODELS = [
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
+
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  let lastError = null;
+
+  for (let mIdx = 0; mIdx < CANDIDATE_MODELS.length; mIdx++) {
+    const model = CANDIDATE_MODELS[mIdx];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const parts = [{ text: PROMPT }];
+    for (const frame of frames) {
+      parts.push({ inline_data: { mime_type: frame.mimeType, data: frame.base64 } });
+    }
+
+    const body = {
+      contents: [{ parts }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 768 }
+    };
+
+    try {
+      if (onStatus) {
+        if (mIdx === 0) onStatus(`Consultando Gemini Vision (${model}) con ${frames.length} frame…`);
+        else onStatus(`Tentativo con modello alternativo (${model})…`);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${response.status}`;
+        const errStatus = response.status;
+
+        if (errStatus === 400 && (errMsg.includes('API key') || errMsg.includes('INVALID_ARGUMENT'))) {
+          throw new Error(`Chiave API non valida: ${errMsg}`);
+        }
+        if (errStatus === 403) throw new Error(`Accesso negato: ${errMsg}`);
+
+        const err = new Error(errMsg);
+        err.status = errStatus;
+        throw err;
+      }
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim();
+
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        throw new Error(`Risposta video non parsabile:\n${rawText.slice(0, 300)}`);
+      }
+    } catch (err) {
+      lastError = err;
+      if (err.message.startsWith('Chiave API non valida') || err.message.startsWith('Accesso negato')) {
+        throw err;
+      }
+      await sleep(500);
+    }
+  }
+
+  throw new Error(`Gemini Vision non raggiungibile per analisi video: ${lastError?.message || 'Server occupato'}`);
+}
+
+/**
+ * Render video emotion analysis results into the modal UI.
+ */
+function renderVideoAnalysisResults(result, frames) {
+  lastVideoAnalysisResult = null;
+
+  const weights = result.plutchik_weights || {};
+  let dominantKey = 'gioia', maxW = -1;
+  for (const [k, w] of Object.entries(weights)) {
+    if (w > maxW) { maxW = w; dominantKey = k; }
+  }
+
+  const pk = PLUTCHIK_PRIMARIES[dominantKey] || PLUTCHIK_PRIMARIES.gioia;
+  const pct = Math.round(Math.max(0, Math.min(1, result.confidence || maxW || 0.8)) * 100);
+
+  const datasetMatch = emotionsDataset.find(e =>
+    e.termine_originale.toLowerCase() === (result.emotion || '').toLowerCase() ||
+    e.famiglia_emotiva.toLowerCase() === (result.emotion || '').toLowerCase()
+  ) || emotionsDataset.find(e => e.plutchik?.primary === dominantKey);
+
+  const emotionObj = {
+    termine_originale: result.emotion || pk.it,
+    lingua_cultura: 'Visione Artificiale / Analisi Video',
+    famiglia_emotiva: pk.it,
+    significato_italiano: result.description,
+    valenza: result.valenza || 'neutra',
+    arousal: result.arousal || 'medio',
+    modello_fonte: result.isLocal ? 'Analisi Visiva Dinamica (Multiframe)' : 'Google Gemini Vision (Video)',
+    plutchik: null
+  };
+
+  emotionObj.plutchik = {
+    primary: dominantKey,
+    primary_it: pk.it,
+    secondary: null,
+    secondary_it: null,
+    weights,
+    color: pk.color,
+    glow: pk.glow,
+    core: pk.core,
+    angle: pk.angle,
+    physics: pk.physics
+  };
+
+  lastVideoAnalysisResult = emotionObj;
+
+  // Confidence ring
+  const offset = 113.1 * (1 - pct / 100);
+  const ringEl  = document.getElementById('video-ring-progress');
+  const ringPct = document.getElementById('video-ring-pct');
+  if (ringEl) { ringEl.setAttribute('stroke-dashoffset', offset); ringEl.style.stroke = pk.color; }
+  if (ringPct) { ringPct.textContent = `${pct}%`; ringPct.style.color = pk.color; }
+
+  const banner = document.getElementById('video-detected-banner');
+  if (banner) { banner.style.borderColor = pk.color + '55'; banner.style.background = pk.color + '12'; }
+
+  const nameEl = document.getElementById('video-detected-name');
+  if (nameEl) { nameEl.textContent = result.emotion || pk.it; nameEl.style.color = pk.color; }
+
+  const subEl = document.getElementById('video-detected-sub');
+  if (subEl) subEl.textContent = `${(result.valenza || '').toUpperCase()} · Arousal: ${(result.arousal || '').toUpperCase()} · ${pk.it}`;
+
+  const descEl = document.getElementById('video-ai-desc');
+  if (descEl) descEl.textContent = `« ${result.description} »`;
+
+  // Per-frame summary cards
+  const frameSummaryEl = document.getElementById('video-frame-summary');
+  if (frameSummaryEl) {
+    frameSummaryEl.innerHTML = '';
+    const frameEmotions = result.frame_emotions || [];
+    frames.forEach((frame, i) => {
+      const card = document.createElement('div');
+      card.className = 'video-frame-card';
+      const frameEmotion = frameEmotions[i] || '—';
+      card.innerHTML = `
+        <div class="video-frame-card-num">Frame ${i + 1} · ${frame.time.toFixed(1)}s</div>
+        <div class="video-frame-card-emotion">${frameEmotion}</div>`;
+      frameSummaryEl.appendChild(card);
+    });
+  }
+
+  // Plutchik bars
+  const barsEl = document.getElementById('video-analyze-bars');
+  if (barsEl) {
+    barsEl.innerHTML = '';
+    const sorted = Object.entries(weights).sort(([,a], [,b]) => b - a);
+    sorted.forEach(([key, w]) => {
+      const pkEntry = PLUTCHIK_PRIMARIES[key];
+      if (!pkEntry) return;
+      const wPct = Math.round(w * 100);
+      if (wPct < 1) return;
+      const row = document.createElement('div');
+      row.className = 'analyze-vector-row';
+      row.innerHTML = `
+        <span class="vector-label">${pkEntry.it}</span>
+        <div class="vector-bar-track">
+          <div class="vector-bar-fill" style="width:${wPct}%;background:${pkEntry.color}"></div>
+        </div>
+        <span class="vector-pct">${wPct}%</span>`;
+      barsEl.appendChild(row);
+    });
+  }
+
+  // Dataset match card
+  const matchCard = document.getElementById('video-analyze-match-card');
+  if (matchCard) {
+    if (datasetMatch) {
+      matchCard.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <span style="font-weight:700;font-size:0.95rem;color:#fff">${datasetMatch.termine_originale}</span>
+          <span style="font-size:0.68rem;color:var(--text-dim);font-family:monospace">${datasetMatch.lingua_cultura.split('/')[0]}</span>
+        </div>
+        <div style="font-size:0.72rem;margin-bottom:6px;color:${pk.color}">● ${datasetMatch.famiglia_emotiva}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.4">${datasetMatch.significato_italiano}</div>`;
+    } else {
+      matchCard.innerHTML = `<div style="font-size:0.78rem;color:var(--text-dim);font-style:italic">Nessuna corrispondenza esatta nel dataset — verrà usata la voce sintetica generata dall'IA.</div>`;
+    }
+  }
+
+  // Show results
+  const resultsEl = document.getElementById('video-analyze-results');
+  if (resultsEl) {
+    resultsEl.style.display = 'block';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+/**
+ * Initialize all event listeners for the video emotion analysis modal.
+ */
+function initVideoAnalyzeModal() {
+  const modal          = document.getElementById('modal-video-analyze');
+  const btnToggle      = document.getElementById('btn-video-analyze-toggle');
+  const btnClose       = document.getElementById('btn-close-video-analyze');
+  const fileInput      = document.getElementById('video-file-input');
+  const dropzone       = document.getElementById('video-dropzone');
+  const btnChooseFile  = document.getElementById('btn-choose-video-file');
+  const previewSection = document.getElementById('video-preview-section');
+  const videoEl        = document.getElementById('video-player-element');
+  const btnRemoveVideo = document.getElementById('btn-remove-video');
+  const btnDoAnalyze   = document.getElementById('btn-do-video-analyze');
+  const statusEl       = document.getElementById('video-status');
+  const statusText     = document.getElementById('video-status-text');
+  const errorEl        = document.getElementById('video-error');
+  const resultsEl      = document.getElementById('video-analyze-results');
+  const btnApply       = document.getElementById('btn-apply-video-analyzed');
+  const configRow      = document.getElementById('video-config-row');
+  const framesStrip    = document.getElementById('video-frames-strip');
+  const framesRow      = document.getElementById('video-frames-row');
+  const framesPills    = document.querySelectorAll('.video-frames-pill');
+  const badgeDuration  = document.getElementById('video-duration-badge');
+  const badgeFormat    = document.getElementById('video-format-badge');
+  const badgeFrames    = document.getElementById('video-frames-badge');
+  const canvas         = document.getElementById('video-frame-canvas');
+
+  if (!modal) return;
+
+  let currentFile = null;
+  let capturedFrames = [];
+
+  // ── Open / Close ─────────────────────────────────────────────────────────
+  if (btnToggle) {
+    btnToggle.addEventListener('click', () => {
+      modal.classList.add('open');
+      btnToggle.classList.add('active');
+    });
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    if (btnToggle) btnToggle.classList.remove('active');
+    if (videoEl) videoEl.pause();
+  }
+
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  // ── Frame count pills ────────────────────────────────────────────────────
+  framesPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      framesPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      videoFrameCount = parseInt(pill.getAttribute('data-frames'), 10) || 8;
+      if (badgeFrames) badgeFrames.textContent = `Frame: ${videoFrameCount}`;
+    });
+  });
+
+  // ── Error / Status helpers ────────────────────────────────────────────────
+  function showError(msg) {
+    if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+  }
+
+  function formatTime(sec) {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  // ── File handling ─────────────────────────────────────────────────────────
+  function handleFile(file) {
+    if (!file) return;
+    const isVideo = file.type.startsWith('video/') ||
+      /\.(mp4|webm|mov|avi|mkv|ogg|m4v|3gp)$/i.test(file.name);
+    if (!isVideo) {
+      showError('Il file selezionato non è un formato video valido (usa MP4, WEBM, MOV, AVI, MKV).');
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      showError('File video troppo grande (max 100 MB).');
+      return;
+    }
+
+    currentFile = file;
+    capturedFrames = [];
+
+    const url = URL.createObjectURL(file);
+    if (videoEl) {
+      videoEl.src = url;
+      videoEl.load();
+    }
+
+    if (badgeFormat) badgeFormat.textContent = `Formato: ${file.name.split('.').pop().toUpperCase()}`;
+    if (badgeFrames) badgeFrames.textContent = `Frame: ${videoFrameCount}`;
+
+    if (videoEl) {
+      videoEl.onloadedmetadata = () => {
+        if (badgeDuration) badgeDuration.textContent = `Durata: ${formatTime(videoEl.duration)}`;
+        if (previewSection) previewSection.style.display = 'flex';
+        if (dropzone) dropzone.style.display = 'none';
+        if (configRow) configRow.style.display = 'flex';
+        if (framesStrip) framesStrip.style.display = 'none';
+        if (framesRow) framesRow.innerHTML = '';
+        if (resultsEl) resultsEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+        lastVideoAnalysisResult = null;
+        if (btnDoAnalyze) btnDoAnalyze.disabled = false;
+      };
+    }
+  }
+
+  function removeVideo() {
+    currentFile = null;
+    capturedFrames = [];
+    lastVideoAnalysisResult = null;
+    if (videoEl) { videoEl.pause(); videoEl.src = ''; }
+    if (previewSection) previewSection.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'flex';
+    if (configRow) configRow.style.display = 'none';
+    if (framesStrip) framesStrip.style.display = 'none';
+    if (framesRow) framesRow.innerHTML = '';
+    if (fileInput) fileInput.value = '';
+    if (resultsEl) resultsEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (btnDoAnalyze) btnDoAnalyze.disabled = true;
+  }
+
+  if (btnChooseFile) btnChooseFile.addEventListener('click', e => { e.stopPropagation(); fileInput?.click(); });
+  if (dropzone) dropzone.addEventListener('click', () => fileInput?.click());
+  if (fileInput) fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  if (btnRemoveVideo) btnRemoveVideo.addEventListener('click', e => { e.stopPropagation(); removeVideo(); });
+
+  // Drag-and-drop
+  if (dropzone) {
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+  }
+
+  // ── Run Analysis ──────────────────────────────────────────────────────────
+  if (btnDoAnalyze) {
+    btnDoAnalyze.addEventListener('click', async () => {
+      if (!currentFile || !videoEl) return;
+
+      if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+      if (resultsEl) resultsEl.style.display = 'none';
+      if (statusEl) statusEl.style.display = 'flex';
+      if (statusText) statusText.textContent = 'Campionamento frame dal video…';
+      btnDoAnalyze.disabled = true;
+
+      try {
+        videoEl.pause();
+
+        // Extract frames & compute visual metrics
+        const frames = await extractVideoFrames(
+          videoEl,
+          canvas,
+          videoFrameCount,
+          (current, total) => {
+            if (statusText) statusText.textContent = `Campionamento frame ${current}/${total}…`;
+          }
+        );
+
+        capturedFrames = frames;
+
+        // Show frame thumbnails in the strip
+        if (framesRow) {
+          framesRow.innerHTML = '';
+          frames.forEach((frame, i) => {
+            const img = document.createElement('img');
+            img.className = 'video-frame-thumb';
+            img.src = `data:image/jpeg;base64,${frame.base64}`;
+            img.alt = `Frame ${i + 1}`;
+            img.title = `Frame ${i + 1} — ${frame.time.toFixed(1)}s`;
+            framesRow.appendChild(img);
+          });
+        }
+        if (framesStrip) framesStrip.style.display = 'block';
+
+        let result = null;
+
+        // 1. Try Gemini Vision if API key is present
+        if (geminiApiKey) {
+          try {
+            if (statusText) statusText.textContent = `Analisi emotiva di ${frames.length} frame con Gemini Vision…`;
+            result = await callGeminiVideo(geminiApiKey, frames, msg => {
+              if (statusText) statusText.textContent = msg;
+            });
+          } catch (geminiErr) {
+            console.warn("Gemini Video fallito o non disponibile, passo al motore visivo locale:", geminiErr);
+          }
+        }
+
+        // 2. Resilient local visual heuristics fallback if Gemini not available
+        if (!result) {
+          if (statusText) statusText.textContent = 'Elaborazione dinamica e cromatica locale dei fotogrammi…';
+          result = analyzeVideoLocally(frames);
+          result.isLocal = true;
+        }
+
+        if (statusEl) statusEl.style.display = 'none';
+        renderVideoAnalysisResults(result, frames);
+      } catch (err) {
+        showError(`Errore durante l'analisi video:\n${err.message}`);
+      } finally {
+        btnDoAnalyze.disabled = false;
+        if (statusEl) statusEl.style.display = 'none';
+      }
+    });
+  }
+
+  // ── Apply to 3D entity ────────────────────────────────────────────────────
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      if (!lastVideoAnalysisResult) return;
+      applyEmotion(lastVideoAnalysisResult, true);
+      const inp = document.getElementById('emotion-input');
+      if (inp) inp.value = lastVideoAnalysisResult.termine_originale;
+      closeModal();
+    });
+  }
+}
+
